@@ -18,6 +18,9 @@ https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a
 
 ## Son sürümde
 
+- Yeni oyuncularda varsayılan kulüp Fenerbahçe.
+- Penaltıcı profilindeki isim ve cinsiyeti kullanır; sırtında ismin, formasında seçilen kulübün renkleri görünür. Kart seçimi vuruş yeteneğini belirler.
+
 - Sol tıklama veya dokunma nişanı sabitler. Başka bir noktaya tekrar tıklayarak hedef değiştirilebilir.
 - İsim ve cinsiyet seçimi; penaltılar, takım kadrosu, transferler, sanal bakiye, kariyer ve kayıt sistemi.
 - Yaman adı büyük/küçük harften bağımsız tanınır: oyundaki en yüksek reytingli 11 oyuncu ve 55.555.555 başlangıç bakiyesi.
