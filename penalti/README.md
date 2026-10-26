@@ -39,4 +39,4 @@ Kaynaklar: https://www.espn.com/soccer/ ve https://renderz.app/players
 Bağımsız bir oyundur; EA SPORTS ile bağlantılı değildir.
 
 
-Minecraft bölümü (26 Ekim 2026): Sol üstteki Minecraft’a git butonu #minecraft bölümünü açar. Sunucu henüz kurulmamıştır; adres bekleniyor. Bu bölümdeki harita ZIP’i taslaktır ve Minecraft içinde henüz test edilmemiştir. TaCZ dahil değildir.
+Blok dünyası (26 Ekim 2026): Sol üstteki Minecraft’a git butonu doğrudan tek kişilik, üç boyutlu blok dünyasını açar. Minecraft Java değildir; bağımsız bir tarayıcı oyunudur. Sunucu, Aternos veya giriş gerekmez. WASD: hareket; fare sürükleme veya oklar: bakış; boşluk: zıplama; Q/sol tık: kırma; E/sağ tık: yerleştirme; 1–8: malzeme seçimi. Yeşil Vadi ve Siper Alanı ayrı kaydedilir. Kayıt anahtarı yaman-block-world-v1, futbol kaydından ayrıdır. Grafikler WebGL ve özgün prosedürel dokularla çizilir. Harici oyun kütüphanesi kullanılmaz.
