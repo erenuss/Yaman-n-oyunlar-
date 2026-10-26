@@ -37,3 +37,6 @@ https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a
 Kaynaklar: https://www.espn.com/soccer/ ve https://renderz.app/players
 
 Bağımsız bir oyundur; EA SPORTS ile bağlantılı değildir.
+
+
+Minecraft bölümü (26 Ekim 2026): Sol üstteki Minecraft’a git butonu #minecraft bölümünü açar. Sunucu henüz kurulmamıştır; adres bekleniyor. Bu bölümdeki harita ZIP’i taslaktır ve Minecraft içinde henüz test edilmemiştir. TaCZ dahil değildir.
