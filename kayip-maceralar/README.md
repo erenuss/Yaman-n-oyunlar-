@@ -8,7 +8,7 @@ Harita, pusula, oryantiring ve doğada güvenli davranmayı öğreten birinci ş
 
 - Soldaki okları basılı tutarak hareket et.
 - Ekranın sağında parmağını sürükleyerek etrafa bak. Aynı anda yürüyebilirsin.
-- İncele: sandık aç, madalya al, kontrol noktasını incele.
+- Bir nesneye yaklaştığında çıkan işlem kartına dokun: sandık aç, madalya topla veya konuş. Klavye gerekmez.
 - Gözlem: hayvanları uzaktan defterine ekle. Zıpla: küçük engelleri aş.
 - Pusula, çanta, harita ve Efsane Kitabı ekrandan açılır. Üstteki düdük ekibinden yardım istemeni sağlar.
 - Telefonu dik veya yatay tutabilirsin.
