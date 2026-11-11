@@ -7,7 +7,7 @@ Harita, pusula, oryantiring ve doğada güvenli davranmayı öğreten birinci ş
 ## Oyun menüsü
 
 - Ada Macerası: 3B ada, sandıklar, hayvan gözlemi ve beş kontrol noktalı keşif.
-- Sıkıcı: doğrudan altı soruyla ilerle. Son doğru cevabın ardından altın madalya otomatik verilir.
+- Bilgi Parkuru: doğrudan altı soruyla ilerle. Son doğru cevabın ardından altın madalya otomatik verilir.
 - İki modun ilerlemesi ayrı saklanır. Soru modundan çıkıp kaldığın soruya dönebilirsin.
 
 ## Telefon ve tablet
