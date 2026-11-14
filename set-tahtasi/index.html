@@ -16,6 +16,7 @@ body{min-height:100dvh;display:flex;justify-content:center}
 #app{width:100%;max-width:560px;padding:8px 10px calc(14px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:8px}
 button,input,select{font:inherit;color:inherit}
 button{cursor:pointer;border:1px solid var(--line);background:var(--panel2);border-radius:12px;padding:10px 12px;font-weight:650;min-height:44px}
+button{touch-action:manipulation}
 button:active{transform:translateY(1px)}
 button:disabled{opacity:.4;cursor:default}
 button.pri{background:var(--acc);border-color:var(--acc);color:var(--acc-ink)}
@@ -60,7 +61,7 @@ dialog p{color:var(--mut);font-size:13.5px;margin:4px 0 10px;line-height:1.4}
 .item button:first-child{flex:1;text-align:left;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #toast{position:fixed;left:50%;bottom:calc(22px + env(safe-area-inset-bottom));transform:translateX(-50%);background:#fff;color:#111;padding:10px 16px;border-radius:999px;font-weight:650;font-size:14px;opacity:0;pointer-events:none;transition:opacity .2s;max-width:92vw;text-align:center;z-index:9}
 #toast.on{opacity:1}
-#busy{position:fixed;inset:0;background:#000c;display:flex;align-items:center;justify-content:center;text-align:center;font-weight:700;z-index:8;padding:20px}
+#busy{position:fixed;inset:0;background:#000c;display:flex;align-items:center;justify-content:center;text-align:center;font-weight:700;z-index:8;padding:20px;flex-direction:column;gap:14px}
 </style>
 </head>
 <body>
@@ -262,7 +263,7 @@ function sceneAt(k,t){ // t=null: şema (başlangıç konumu). t 0..1: animasyon
   else{
     const u=seg(t,tm.bw[0],tm.bw[1]),from=ballPos(pos,tm.b);
     if(tm.ps==='shot'){ball=lerp(from,HOOP,u);ball[2]=Math.sin(u*Math.PI)*.9}
-    else ball=lerp(from,u>=1?ballPos(pos,tm.ps):pos[tm.ps],u);
+    else ball=lerp(from,ballPos(pos,tm.ps),u);
   }
   return {pos,ball};
 }
@@ -381,16 +382,17 @@ function toCourt(e){
 
 /* ---------- Animasyon ---------- */
 const DUR=1700;
+function durOf(k){const st=play.steps[k];return st&&(Object.keys(st.m).length||validPs(st,ballAt(k))!=null)?DUR:250}
 function stopAnim(){if(anim){cancelAnimationFrame(anim.raf);clearTimeout(anim.to);anim=null}}
 function playStep(k,then){
   stopAnim();
   if(k>=play.steps.length){then&&then();return}
-  const t0=performance.now();anim={k,t:0};
+  const t0=performance.now(),D=durOf(k);anim={k,t:0};
   const tick=now=>{
     if(!anim)return;
-    anim.t=Math.min(1,(now-t0)/DUR);render();
+    anim.t=Math.min(1,(now-t0)/D);render();
     if(anim.t<1)anim.raf=requestAnimationFrame(tick);
-    else anim.to=setTimeout(()=>{anim=null;then&&then()},450);
+    else anim.to=setTimeout(()=>{anim=null;then&&then()},D<DUR?0:450);
   };
   anim.raf=requestAnimationFrame(tick);ui();
 }
@@ -442,7 +444,7 @@ function nearest(pt,list,pos,maxd){
 }
 const ids=()=>play.def?[0,1,2,3,4,5,6,7,8,9]:[0,1,2,3,4];
 cv.addEventListener('pointerdown',e=>{
-  if(mode!=='edit')return;
+  if(mode!=='edit'||drag)return;
   stopAnim();auto=false;
   const pt=toCourt(e),pos=posAt(cur);
   if(tool==='p'){
@@ -489,10 +491,12 @@ function endDrag(){
   const end=d.raw[d.raw.length-1];
   if(!d.moved||dist(end,d.start)<PR+3){render();toast('Yolu çizmek için oyuncudan sürükle.');return}
   let pts=rdp(d.raw,2.2).slice(1).map(p=>[Math.round(p[0]),Math.round(p[1])]);
-  if(pts.length>7)pts=rdp(d.raw,4).slice(1).map(p=>[Math.round(p[0]),Math.round(p[1])]);
+  for(let eps=3;pts.length>12&&eps<=6;eps+=1.5)pts=rdp(d.raw,eps).slice(1).map(p=>[Math.round(p[0]),Math.round(p[1])]);
+  if(pts.length>12)pts=Array.from({length:12},(_,i)=>pts[Math.round((i+1)*pts.length/12)-1]);
   snap();play.steps[cur].m[d.j]={k:tool,pts};changed();
 }
 cv.addEventListener('pointerup',endDrag);
+cv.addEventListener('contextmenu',e=>e.preventDefault());
 cv.addEventListener('pointercancel',endDrag);
 
 /* ---------- Arayüz ---------- */
@@ -510,12 +514,13 @@ function ui(){
   }
   if(ed){
     const a=document.createElement('button');a.className='add';a.textContent='+ Adım';
-    a.onclick=()=>{stopAnim();snap();play.steps.splice(cur+1,0,{m:{},ps:null,note:''});cur++;if(tool==='place')tool='c';changed();
+    a.onclick=()=>{if(N>=40){toast('En fazla 40 adım.');return}stopAnim();snap();play.steps.splice(cur+1,0,{m:{},ps:null,note:''});cur++;if(tool==='place')tool='c';changed();
       requestAnimationFrame(()=>{const on=sb.querySelector('.on');on&&on.scrollIntoView({inline:'center',block:'nearest'})})};
     sb.appendChild(a);
   }else if(cur>=N){
     const e=document.createElement('button');e.className='on';e.textContent='✓';e.style.padding='8px 12px';sb.appendChild(e);
   }
+  cv.style.touchAction=ed?'none':'auto';
   $('badge').textContent=cur>=N?'Set bitti':'Adım '+(cur+1)+' / '+N;
   if(ed){
     if(cur>0&&tool==='place')tool='c';
@@ -563,12 +568,14 @@ $('form').onchange=e=>{
   const f=FORMS[e.target.value];if(!f)return;
   snap();const off=f.map(p=>p.slice());play.p=off.concat(defFor(off));e.target.value='';changed();
 };
-$('bUndo').onclick=()=>{if(!undo.length)return;stopAnim();const id=play.id;play=JSON.parse(undo.pop());play.id=id;cur=Math.min(cur,play.steps.length-1);changed()};
-$('bClear').onclick=()=>{snap();const st=play.steps[cur];st.m={};st.ps=null;changed()};
-$('bDelStep').onclick=()=>{if(play.steps.length<2)return;snap();play.steps.splice(cur,1);cur=Math.min(cur,play.steps.length-1);changed()};
+$('bUndo').onclick=()=>{if(!undo.length)return;stopAnim();const old=play;play=JSON.parse(undo.pop());play.id=old.id;play.name=old.name;
+  if(play.steps.length===old.steps.length)play.steps.forEach((s,i)=>s.note=old.steps[i].note);cur=Math.min(cur,play.steps.length-1);changed()};
+$('bClear').onclick=()=>{stopAnim();snap();const st=play.steps[cur];st.m={};st.ps=null;changed()};
+$('bDelStep').onclick=()=>{if(play.steps.length<2)return;stopAnim();snap();play.steps.splice(cur,1);cur=Math.min(cur,play.steps.length-1);changed()};
 $('bPlay').onclick=()=>{const k=cur;playStep(k,()=>{anim={k:Math.min(k+1,play.steps.length),t:null};render();anim.to=setTimeout(()=>{anim=null;render()},900)})};
 $('bPreview').onclick=()=>{stopAnim();mode='view';cur=0;ui()};
-$('bShare').onclick=$('vShare').onclick=()=>$('dShare').showModal();
+let url='';
+$('bShare').onclick=$('vShare').onclick=async()=>{stopAnim();auto=false;url=await shareUrl();ui();$('dShare').showModal()};
 
 $('vNext').onclick=()=>{
   if(anim&&anim.t!=null)return;
@@ -661,14 +668,13 @@ async function copy(text){
   }
 }
 $('sLink').onclick=async()=>{
-  const url=await shareUrl();
   if(navigator.share){
     try{await navigator.share({title:title(),text:'🏀 '+title()+' — dokun, adım adım izle:',url});$('dShare').close();return}
     catch(e){if(e.name==='AbortError')return}
   }
   toast(await copy(url)?'Link kopyalandı. Takım grubuna yapıştır.':'Kopyalanamadı.');
 };
-$('sCopy').onclick=async()=>{toast(await copy(await shareUrl())?'Link kopyalandı.':'Kopyalanamadı.')};
+$('sCopy').onclick=async()=>{toast(await copy(url)?'Link kopyalandı.':'Kopyalanamadı.')};
 
 async function deliver(blob,fname){
   const file=new File([blob],fname,{type:blob.type});
@@ -695,7 +701,7 @@ $('sPng').onclick=async()=>{
   g.fillStyle='#fff';g.font='800 40px system-ui,sans-serif';g.textBaseline='middle';g.fillText('🏀 '+title(),gap,head/2+4);
   for(let i=0;i<N;i++){
     const x=gap+(i%cols)*(cw+gap),y=head+Math.floor(i/cols)*(ch+noteH+gap),s=cw/(W+2*M);
-    g.save();g.beginPath();g.roundRect(x,y,cw,ch,14);g.clip();
+    g.save();g.beginPath();(g.roundRect?g.roundRect(x,y,cw,ch,14):g.rect(x,y,cw,ch));g.clip();
     g.setTransform(s,0,0,s,x+M*s,y+M*s);drawScene(g,i,null);g.restore();g.setTransform(1,0,0,1,0,0);
     g.fillStyle='#ff8a2a';g.font='800 26px system-ui,sans-serif';g.textBaseline='top';g.textAlign='left';g.fillText('Adım '+(i+1),x+4,y+ch+10);
     g.fillStyle='#dfe6f2';g.font='22px system-ui,sans-serif';wrap(g,play.steps[i].note||'',x+110,y+ch+12,cw-116,27,3);
@@ -724,7 +730,7 @@ $('sVid').onclick=async()=>{
     wrap(g,k<N?(play.steps[k].note||''):'',20,head+ch+16,cw-40,32,3);
     g.save();g.setTransform(s,0,0,s,M*s,head+M*s);drawScene(g,k,t);g.restore();
   };
-  const tl=[];for(let k=0;k<N;k++){tl.push([k,null,holdMs(k)+300],[k,1,DUR],[k,'end',450])}tl.push([N,null,1600]);
+  const tl=[];for(let k=0;k<N;k++){tl.push([k,null,holdMs(k)+300],[k,1,durOf(k)],[k,'end',durOf(k)<DUR?0:450])}tl.push([N,null,1600]);
   const total=tl.reduce((a,x)=>a+x[2],0);
   frame(0,null);
   const rec=new MediaRecorder(c.captureStream(30),{mimeType:type,videoBitsPerSecond:2500000}),chunks=[];
@@ -741,9 +747,14 @@ $('sVid').onclick=async()=>{
       if(el<total)setTimeout(tick,1000/30);else res();
     };tick();
   });
-  rec.stop();await done;$('busy').classList.add('hide');
-  const ext=type.includes('mp4')?'mp4':'webm';
-  deliver(new Blob(chunks,{type:type.split(';')[0]}),slug()+'.'+ext);
+  rec.stop();await done;
+  const ext=type.includes('mp4')?'mp4':'webm',blob=new Blob(chunks,{type:type.split(';')[0]}),bz=$('busy');
+  bz.textContent='Video hazır.';
+  const ok=document.createElement('button'),no=document.createElement('button');
+  ok.className='pri';ok.textContent='Paylaş / Kaydet';no.textContent='Vazgeç';
+  ok.onclick=()=>{bz.classList.add('hide');deliver(blob,slug()+'.'+ext)};
+  no.onclick=()=>bz.classList.add('hide');
+  bz.append(ok,no);
 };
 
 /* ---------- Başlat ---------- */
@@ -761,7 +772,7 @@ async function init(){
   }
   ui();
 }
-window.addEventListener('resize',resize);
+window.addEventListener('resize',()=>{const a=document.activeElement;if(a&&a.tagName==='INPUT')return;resize()});
 window.addEventListener('hashchange',()=>location.reload());
 init();
 </script>
