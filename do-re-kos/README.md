@@ -15,7 +15,13 @@ Sesinle yönettiğin bir koşu oyunu. Tarayıcıda, telefonda ve bilgisayarda ç
 3. **Şarkılar:** Merdiven, Mary'nin Kuzusu, Neşeye Övgü, Jingle Bells, Daha Dün Annemizin, Tembel Çocuk, Gam Merdiveni (kamu malı ezgiler). Liste bitince daha hızlı yeni tur başlar.
 4. **Engeller** hep melodi yolunun dışında üretilir: notayı bir sonrakine kadar tutan bir şarkıcı hiç çarpmaz.
 
-Perde algılama cihazda YIN algoritmasıyla yapılır; ses hiçbir yere gönderilmez.
+## Ses → hareket uyumu
+
+- Mikrofon sesi önce 70–1200 Hz bandına süzülür (uğultu ve tıslama perdeyi şaşırtmasın), sonra cihazda **YIN** algoritmasıyla perdesi bulunur. Ses hiçbir yere gönderilmez.
+- Tek karelik oktav hataları elenir, küçük titreme yumuşatılır, gerçek nota değişimine anında uyulur. Hece aralarındaki kısa sessizlikte karakter düşmez.
+- Kişisel Do yuvarlanmaz: tam senin sesine göre ayarlanır, oyun sırasında da kaymana yavaşça uyar (en fazla ¾ yarım ton).
+- Notaya yakın ses, karakteri o notanın çizgisine “mıknatıs” gibi oturtur. Mi–Fa gibi yarım ton aralıklar da aynı kolaylıkta.
+- “Tam isabet” cent cinsinden ölçülür (±30 cent, ~150 ms ortalama), yani vibrato yapan cezalandırılmaz.
 Mikrofon yoksa ekrana dokunup parmağını kaydırarak ya da 1–8 tuşlarıyla oynanabilir. P / Esc: duraklat.
 
 Mikrofon için sayfanın https üzerinden açılması gerekir (ör. GitHub Pages: `/do-re-kos/`).

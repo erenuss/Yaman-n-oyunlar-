@@ -48,7 +48,7 @@ const degOfY = y => (groundY - R - y) / slot - 1;
 
 /* ---------- Durum ---------- */
 const G = {
-  state: 'demo', diff: 0, nNotes: 5, useMic: false, baseMidi: 55,
+  state: 'demo', diff: 0, nNotes: 5, useMic: false, baseMidi: 55, calMidi: 55,
   x: 0, speed: 170, t: 0, hearts: 3, score: 0, combo: 0, bestCombo: 0, notes: 0, perfect: 0, songsDone: 0,
   coins: [], pillars: [], hangs: [], gaps: [], signs: [], songs: [], parts: [], passed: 0,
   cursor: 0, songIdx: 0, round: 0, phraseId: 0, curSong: null,
@@ -70,10 +70,15 @@ async function startMic() {
   const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: false, autoGainControl: false } });
   const src = actx.createMediaStreamSource(stream);
   analyser = actx.createAnalyser(); analyser.fftSize = 2048;
-  src.connect(analyser);
+  // Ses bandı: alttaki uğultu/klima ve üstteki tıslama perdeyi şaşırtmasın
+  const hp = actx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 70; hp.Q.value = 0.7;
+  const lp = actx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1200; lp.Q.value = 0.7;
+  src.connect(hp).connect(lp).connect(analyser);
   buf = new Float32Array(analyser.fftSize);
   micOn = true;
 }
+/* PITCH-START — saf fonksiyonlar (DOM yok); test düzeneği de bu bloğu çalıştırır */
+/* YIN perde algılama. Net bir çukur yoksa en derin çukuru “düşük güvenle” döndürür. */
 let yinD = null;
 function yin(b, sr) {
   const half = b.length >> 1;
@@ -85,56 +90,115 @@ function yin(b, sr) {
     for (let i = 0; i < half; i++) { const x = b[i] - b[i + t]; s += x * x; }
     run += s; d[t] = run > 0 ? s * t / run : 1;
   }
+  let tau = -1, bestT = -1;
   for (let t = minT; t <= maxT; t++) {
-    if (d[t] < 0.18) {
-      while (t + 1 <= maxT && d[t + 1] < d[t]) t++;
-      const x0 = d[t - 1], x1 = d[t], x2 = d[t + 1], den = x0 + x2 - 2 * x1;
-      const sh = den ? (x0 - x2) / (2 * den) : 0;
-      return { f: sr / (t + sh), c: 1 - x1 };
-    }
+    if (d[t] < 0.2) { while (t + 1 <= maxT && d[t + 1] < d[t]) t++; tau = t; break; }
+    if (bestT < 0 || d[t] < d[bestT]) bestT = t;
   }
-  return null;
+  if (tau < 0) { if (bestT < 0 || d[bestT] > 0.4) return null; tau = bestT; }
+  const x0 = d[tau - 1], x1 = d[tau], x2 = d[tau + 1], den = x0 + x2 - 2 * x1;
+  const sh = den > 0 ? Math.max(-1, Math.min(1, (x0 - x2) / (2 * den))) : 0;
+  return { f: sr / (tau + sh), c: 1 - x1 };
 }
+/* Ham perde dizisini kararlı bir “söylenen nota”ya çevirir:
+   - tek karelik oktav/beşli sıçramalarını eler (3 kare sürerse kabul eder)
+   - küçük titremeyi yumuşatır, gerçek nota değişimine anında uyar
+   - hece aralarında kısa sessizlikte sesi tutar */
+function makeTracker() { return { on: false, sm: 0, cand: 0, candN: 0, hang: 0, vel: 0 }; }
+function trackPitch(T, r, dt) {
+  // r: {m: midi, c: güven} ya da null
+  if (r && T.on && r.c < 0.8 && Math.abs(r.m - T.sm) > 1.5) r = null; // zayıf ve tutarsız ölçümü at
+  if (r && !T.on && r.c < 0.8) r = null;                                // zayıf ölçümle ses başlatma
+  if (r) {
+    if (!T.on) { T.sm = r.m; T.vel = 0; }
+    else {
+      const diff = r.m - T.sm;
+      if (Math.abs(diff) > 9.5) {                       // büyük sıçrama: büyük ihtimalle oktav hatası
+        if (T.candN && Math.abs(r.m - T.cand) < 1.2) T.candN++; else { T.cand = r.m; T.candN = 1; }
+        if (T.candN < 3) { T.hang -= dt; return T; }
+        T.sm = r.m; T.vel = 0;
+      } else {
+        const a = Math.min(1, 0.5 + Math.abs(diff) * 0.5);   // küçük fark → yumuşat, büyük → hemen geç
+        const prev = T.sm; T.sm += diff * a;
+        T.vel += ((T.sm - prev) / Math.max(dt, 1e-3) - T.vel) * Math.min(1, dt * 10);
+      }
+    }
+    T.candN = 0; T.hang = 0.18; T.on = true;
+  } else {
+    T.hang -= dt;
+    if (T.hang <= 0) { T.on = false; T.candN = 0; }
+  }
+  return T;
+}
+/* Göreli yarım ton → çizgi (derece). Notaya yakın sesler notaya “mıknatıs” gibi oturur;
+   iki nota arasında geçiş hızlı ve süreklidir. Mi–Fa gibi yarım ton aralıklar da aynı his verir. */
+function nearestNote(rel, N) {
+  let n = 0; for (let i = 1; i < N; i++) if (Math.abs(rel - SEMIS[i]) < Math.abs(rel - SEMIS[n])) n = i;
+  return n;
+}
+function relToDeg(rel, N, magnet = true) {
+  const top = SEMIS[N - 1];
+  if (rel <= 0 - 1) return Math.max(-0.6, -0.5 + (rel + 1) / 2);
+  if (rel >= top + 1) return Math.min(N - 0.4, N - 0.5 + (rel - top - 1) / 2);
+  const n = nearestNote(rel, N), err = rel - SEMIS[n];
+  const gap = err >= 0 ? (n < N - 1 ? SEMIS[n + 1] - SEMIS[n] : 2) : (n > 0 ? SEMIS[n] - SEMIS[n - 1] : 2);
+  const w = gap / 2, e = Math.min(1, Math.abs(err) / w);
+  const shaped = magnet ? Math.sign(err) * Math.pow(e, 2.2) * 0.5 : Math.sign(err) * e * 0.5; // derece cinsinden
+  return n + shaped;
+}
+/* Ayrıca: doğru notayı hedefleyen kararlı seste, kişisel Do yavaşça sesine uyar
+   (göreli perde oyunu; sabit kayık söyleyen biri birkaç saniyede ortalanır). */
+function adaptBase(G, T, rel, N, dt) {
+  if (!T.on || Math.abs(T.vel) > 2.5) return;
+  const n = nearestNote(rel, N), err = rel - SEMIS[n];
+  if (Math.abs(err) > 0.45) return;
+  G.baseMidi += err * Math.min(1, dt * 0.12);
+  G.baseMidi = Math.max(G.calMidi - 0.75, Math.min(G.calMidi + 0.75, G.baseMidi));
+}
+/* PITCH-END */
 
 /* V: o anki “ses” — mikrofon, dokunma, klavye ya da demo yapay zekâsı */
-const V = { on: false, deg: 0, midi: 0, level: 0, hist: [], hang: 0, rms: 0 };
+const V = { on: false, deg: 0, midi: 0, rel: 0, cents: 0, centsAvg: 0, note: -1, level: 0, rms: 0 };
+const TR = makeTracker();
 const pointer = { down: false, y: 0 };
 let keyDeg = null;
 
-function degFromMidi(m) {
-  const N = G.nNotes, top = SEMIS[N - 1];
+function foldRel(m) {
+  const top = SEMIS[G.nNotes - 1];
   let rel = m - G.baseMidi;
   // Bir oktav kayan sesleri (çok ince/kalın söyleyiş) aralığa katla
   while (rel > top + 4) rel -= 12;
   while (rel < -5) rel += 12;
-  if (rel <= 0) return Math.max(-0.6, rel / 2);
-  for (let i = 0; i < N - 1; i++) if (rel <= SEMIS[i + 1]) return i + (rel - SEMIS[i]) / (SEMIS[i + 1] - SEMIS[i]);
-  return Math.min(N - 0.4, N - 1 + (rel - top) / 2);
+  return rel;
 }
-function readMic(dt) {
+const degFromMidi = m => relToDeg(foldRel(m), G.nNotes);
+function readMic() {
   if (!micOn) { V.rms = 0; return null; }
   analyser.getFloatTimeDomainData(buf);
   let s = 0; for (let i = 0; i < buf.length; i++) s += buf[i] * buf[i];
   const rms = Math.sqrt(s / buf.length);
   V.rms = rms;
-  if (rms < Math.max(noiseFloor * 3, 0.008)) return null;
+  if (rms < Math.max(noiseFloor * 1.6, 0.004)) return null; // asıl ayrımı YIN güveni yapar
   const r = yin(buf, actx.sampleRate);
   if (!r || r.f < 65 || r.f > 1100) return null;
-  return 69 + 12 * Math.log2(r.f / 440);
+  return { m: 69 + 12 * Math.log2(r.f / 440), c: r.c };
 }
 function median(a) { const s = [...a].sort((x, y) => x - y); return s[s.length >> 1]; }
 function readVoice(dt) {
-  const m = readMic(dt);
+  const r = readMic();
+  trackPitch(TR, r, dt);
   V.level += ((micOn ? Math.min(1, V.rms * 12) : (V.on ? 0.6 : 0)) - V.level) * Math.min(1, dt * 15);
   if (G.state === 'demo') return demoVoice();
-  if (pointer.down) { const d = degOfY(pointer.y); V.on = d > -0.55; V.deg = Math.min(G.nNotes - 0.4, Math.max(-0.4, d)); return; }
-  if (keyDeg !== null) { V.on = true; V.deg = keyDeg; return; }
-  if (m !== null) {
-    V.hist.push(m); if (V.hist.length > 5) V.hist.shift();
-    V.midi = median(V.hist); V.hang = 0.12; V.on = true; V.deg = degFromMidi(V.midi);
-  } else {
-    V.hang -= dt;
-    if (V.hang <= 0) { V.on = false; V.hist.length = 0; }
+  if (pointer.down) { const d = degOfY(pointer.y); V.on = d > -0.55; V.deg = Math.min(G.nNotes - 0.4, Math.max(-0.4, d)); V.cents = V.centsAvg = 0; return; }
+  if (keyDeg !== null) { V.on = true; V.deg = keyDeg; V.cents = V.centsAvg = 0; return; }
+  V.on = TR.on;
+  if (V.on) {
+    V.midi = TR.sm; V.rel = foldRel(TR.sm); V.deg = relToDeg(V.rel, G.nNotes);
+    const n = nearestNote(V.rel, G.nNotes), c = (V.rel - SEMIS[n]) * 100;
+    // vibratoyu adil değerlendirmek için ~150 ms ortalama
+    V.centsAvg = n === V.note ? V.centsAvg + (c - V.centsAvg) * Math.min(1, dt / 0.15) : c;
+    V.note = n; V.cents = Math.round(c);
+    if (G.state === 'play') adaptBase(G, TR, V.rel, G.nNotes, dt);
   }
 }
 function demoVoice() {
@@ -282,7 +346,7 @@ function update(dt) {
   const support = demo || P.inv > 0 || !overGap(G.x);
   if (V.on) {
     const target = V.deg;
-    P.d += (target - P.d) * (1 - Math.exp(-dt * 13));
+    P.d += (target - P.d) * (1 - Math.exp(-dt * 24));
     P.v = (P.d - prev) / Math.max(dt, 1e-3);
     if (P.d < -1 && support) P.d = -1;
     P.ground = false;
@@ -306,7 +370,7 @@ function update(dt) {
     if (c.x < G.x - R - 14) { c.missed = true; if (!demo) G.combo = 0; continue; }
     if (Math.abs(c.x - G.x) < R + 12 && Math.abs(yOf(c.d) - py) < R + slot * 0.32) {
       c.taken = true; if (demo) continue;
-      const perfect = V.on && Math.abs(V.deg - c.d) < 0.22;
+      const perfect = V.on && Math.abs(V.deg - c.d) < 0.3 && Math.abs(V.centsAvg) <= 30;
       G.combo++; G.bestCombo = Math.max(G.bestCombo, G.combo); G.notes++; c.song.got++;
       const mult = Math.min(4, 1 + Math.floor(G.combo / 8));
       const pts = (perfect ? 25 : 10) * mult; G.score += pts;
@@ -352,9 +416,9 @@ function updateTuner() {
   if (G.state !== 'play' || ++tunerT % 3) return;
   $('#micBar').style.width = Math.round(Math.min(1, V.level) * 100) + '%';
   if (!V.on) { $('#noteName').textContent = '—'; $('#noteName').style.color = '#fff'; $('#noteTune').textContent = 'sessiz'; return; }
-  const n = Math.max(0, Math.min(G.nNotes - 1, Math.round(V.deg))), off = V.deg - n;
+  const n = Math.max(0, Math.min(G.nNotes - 1, Math.round(V.deg))), c = Math.round(V.centsAvg);
   $('#noteName').textContent = NOTE_NAMES[n]; $('#noteName').style.color = COLORS[n];
-  $('#noteTune').textContent = Math.abs(off) < 0.22 ? 'tam isabet ✓' : off > 0 ? 'biraz tiz ↓' : 'biraz pes ↑';
+  $('#noteTune').textContent = Math.abs(c) <= 30 ? 'tam isabet ✓' : c > 0 ? 'biraz tiz ↓' : 'biraz pes ↑';
 }
 
 /* ---------- Çizim ---------- */
@@ -546,7 +610,7 @@ function frame(now) {
 }
 
 /* ---------- Ses ayarı ---------- */
-const CAL = { phase: 0, t: 0, rms: [], midis: [] };
+const CAL = { phase: 0, t: 0, run: 0, rms: [], midis: [] };
 function buildScalePreview() {
   $('#scalePreview').innerHTML = NOTE_NAMES.slice(0, G.nNotes).map((n, i) => '<span data-i="' + i + '">' + n + '</span>').join('');
 }
@@ -559,7 +623,7 @@ function startCalib() {
   $('#ringFill').style.strokeDashoffset = 327; $('#calibNote').textContent = '🤫';
 }
 function setBase(m, msg) {
-  G.baseMidi = Math.round(m); CAL.phase = 2;
+  G.baseMidi = G.calMidi = m; CAL.phase = 2;
   $('#calibGo').disabled = false;
   $('#calibMsg').innerHTML = msg || ('Senin Do\'n: <b>' + absName(G.baseMidi) + '</b> 🎉');
   $('#calibHint').innerHTML = 'Şimdi aşağı yukarı söyleyerek notaları dene. Hazırsan koş!';
@@ -568,7 +632,8 @@ function setBase(m, msg) {
 }
 function calibStep(dt) {
   CAL.t += dt;
-  const m = readMic(dt);
+  const wasOn = TR.on;
+  trackPitch(TR, readMic(), dt);
   V.level = Math.min(1, V.rms * 12);
   if (CAL.phase === 0) {
     CAL.rms.push(V.rms);
@@ -576,15 +641,17 @@ function calibStep(dt) {
     if (CAL.t > 0.8) { noiseFloor = Math.min(0.03, median(CAL.rms)); CAL.phase = 1; CAL.t = 0; $('#calibMsg').textContent = 'Şimdi “Aaaa” de 🎤'; $('#ringFill').style.strokeDashoffset = 327; }
     return;
   }
-  if (m !== null) { V.hist.push(m); if (V.hist.length > 5) V.hist.shift(); V.midi = median(V.hist); V.hang = 0.15; V.on = true; }
-  else { V.hang -= dt; if (V.hang <= 0) { V.on = false; V.hist.length = 0; } }
+  V.on = TR.on; V.midi = TR.sm;
+  CAL.run = V.on ? (wasOn ? CAL.run + dt : 0) : 0;
   if (CAL.phase === 1) {
     $('#calibNote').textContent = V.on ? absName(V.midi) : '…';
-    if (V.on) { CAL.midis.push(V.midi); $('#ringFill').style.strokeDashoffset = 327 * (1 - Math.min(1, CAL.midis.length / 70)); }
+    // başlangıçtaki kaymayı (scoop) atla
+    if (V.on && CAL.run > 0.25) { CAL.midis.push(V.midi); $('#ringFill').style.strokeDashoffset = 327 * (1 - Math.min(1, CAL.midis.length / 70)); }
     if (CAL.midis.length >= 70) { let b = median(CAL.midis); if (b > 72) b -= 12; if (b < 40) b += 12; setBase(b); }
   } else {
-    const d = V.on ? Math.round(degFromMidi(V.midi)) : -1;
-    $('#calibNote').textContent = V.on ? NOTE_NAMES[Math.max(0, Math.min(G.nNotes - 1, d))] : '…';
+    const rel = foldRel(V.midi), d = V.on ? nearestNote(rel, G.nNotes) : -1;
+    const cents = Math.round((rel - SEMIS[Math.max(0, d)]) * 100);
+    $('#calibNote').innerHTML = V.on ? NOTE_NAMES[d] + '<small style="position:absolute;bottom:26px;font-size:12px;opacity:.75">' + (Math.abs(cents) <= 30 ? 'tam ✓' : (cents > 0 ? '+' : '') + cents + ' cent') + '</small>' : '…';
     document.querySelectorAll('#scalePreview span').forEach((s, i) => { const hit = i === d; s.classList.toggle('hit', hit); s.style.background = hit ? COLORS[i] : ''; });
   }
 }
@@ -604,7 +671,7 @@ $('#micStart').onclick = async () => {
     $('#bestLine').textContent = 'Mikrofona izin verilmedi. Tarayıcı ayarlarından izin ver ya da mikrofonsuz dene.';
   }
 };
-$('#touchStart').onclick = () => { audioCtx(); G.useMic = false; G.baseMidi = 60; startGame(); banner('Ekrana dokun ve parmağını<br>yukarı-aşağı kaydır<small>ya da 1–' + G.nNotes + ' tuşlarını basılı tut</small>', 3200); };
+$('#touchStart').onclick = () => { audioCtx(); G.useMic = false; G.baseMidi = G.calMidi = 60; startGame(); banner('Ekrana dokun ve parmağını<br>yukarı-aşağı kaydır<small>ya da 1–' + G.nNotes + ' tuşlarını basılı tut</small>', 3200); };
 $('#calibGo').onclick = startGame;
 $('#calibRedo').onclick = startCalib;
 $('#presetLow').onclick = () => setBase(48, 'Kalın ses: Do = <b>C3</b>');
