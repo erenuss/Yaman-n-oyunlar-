@@ -5,8 +5,8 @@ Kameranın önünde ellerinle müzik yap. Telefonda ve bilgisayarda tarayıcıda
 ## Modlar
 
 - **Teller** — Başparmağınla işaret parmağını birleştir, çek ve bırak: havada bir tel oluşur. İşaret parmağını üzerinden geçirince çalar. Uzun tel kalın, kısa tel ince ses verir. Bir parmağını telin üstünde tutarsan perde olur, kaydırırsan ses kayar.
-- **Theremin** — Bir kalemi tutar gibi çalınır. Açık elin imleçtir; başparmağınla işaret parmağını birleştirince çalar, birleşikken yukarı aşağı gidersen notalar arasında kayar, bırakınca susar. Sağa sola gittikçe ses rengi değişir, elin titremesi vibrato olur. Her el ayrı bir ses. Üç ses (Klasik, Vokal, Cam) ve isteğe bağlı dem sesi.
-- **Şarkı** (Theremin içinde) — Bir ezgi seç; notalar sağdan çalma çizgisine akar, çizgideki notanın şeridinde çimdikle. Şarkı seni bekler, hızına uyar, doğru notada eşlik çalar, altta söylenecek heceler ilerler. İstersen videoya ve kendi sesinle kaydeder. Şarkılar kamu malı ezgilerdir.
+- **Theremin** — İki elini piyanonun üstündeymiş gibi tut. Başparmağını bir parmağına değdirince o parmağın notası çalar; değdikçe sürer, ayırınca biter. Sol el serçeden işarete Do Re Mi Fa, sağ el işaretten serçeye Sol La Si Do: kolunu oynatmadan tam bir oktav. Çalarken elini yukarı aşağı oynatırsan ses bükülür, titretirsen vibrato olur. Her parmağın notası ucunda yazar. Alttaki tuşlara dokunarak ya da klavyede A S D F J K L Ş ile de çalınır. Üç ses (Klasik, Vokal, Cam) ve isteğe bağlı dem sesi.
+- **Şarkı** (Theremin içinde) — Notalar yukarıdan tuşlara iner, sıradaki notanın parmağı elinde parlar. Şarkı seni bekler, hızına uyar, doğru notada eşlik çalar, söylenecek heceler ilerler. Kolay modda hangi parmağı değdirsen sıradaki nota çalar; ritmi sen verirsin. İstersen videoya ve kendi sesinle kaydeder. Şarkılar kamu malı ezgilerdir.
 
 Video kaydı (isteğe bağlı mikrofonla) ve paylaşma.
 
