@@ -156,7 +156,7 @@ function relToDeg(rel, N, magnet = true) {
 /* PITCH-END */
 
 /* V: o anki “ses” — mikrofon, dokunma, klavye ya da demo yapay zekâsı */
-const V = { on: false, deg: 0, raw: 0, hist: [], span: 9, locked: false, lock: -1, cand: -1, candT: 0, offT: 0, midi: 0, rel: 0, cents: 0, centsAvg: 0, note: -1, level: 0, rms: 0 };
+const V = { on: false, deg: 0, raw: 0, locked: false, lock: -1, midi: 0, rel: 0, cents: 0, centsAvg: 0, note: -1, level: 0, rms: 0 };
 const TR = makeTracker();
 const pointer = { down: false, y: 0 };
 let keyDeg = null;
@@ -192,28 +192,18 @@ function readVoice(dt) {
   if (!G.useMic && pointer.down) { const d = degOfY(pointer.y); V.on = d > -0.55; V.deg = V.raw = Math.min(G.nNotes - 0.4, Math.max(-0.4, d)); V.locked = V.on; V.cents = V.centsAvg = 0; return; }
   if (!G.useMic && keyDeg !== null) { V.on = true; V.deg = V.raw = keyDeg; V.locked = true; V.lock = keyDeg; V.cents = V.centsAvg = 0; return; }
   V.on = TR.on;
-  if (!V.on) { V.locked = false; V.lock = V.cand = -1; V.offT = 0; V.hist.length = 0; return; }
+  if (!V.on) { V.locked = false; V.lock = -1; return; }
   V.midi = TR.sm; V.rel = foldRel(TR.sm);
-  // son ~100 ms'deki perde aralığı: küçükse ses durağan (vibrato dahil), büyükse kayıyor
-  V.hist.push(TR.sm); if (V.hist.length > 6) V.hist.shift();
-  V.span = V.hist.length < 6 ? 9 : Math.max(...V.hist) - Math.min(...V.hist);
   V.raw = relToDeg(V.rel, G.nNotes, false);              // sesin gerçek yeri (soldaki ok)
   const n = nearestNote(V.rel, G.nNotes), c = (V.rel - SEMIS[n]) * 100;
   // vibratoyu adil değerlendirmek için ~150 ms ortalama
   V.centsAvg = n === V.note ? V.centsAvg + (c - V.centsAvg) * Math.min(1, dt / 0.1) : c;
   V.note = n; V.cents = Math.round(c);
-  /* Nota kilidi: karakter yalnızca notayı tolerans içinde ~100 ms durağan tutunca o çizgiye çıkar.
-     Notalar arası sesler, kayan ses ve konuşma karakteri oynatmaz. */
-  // karar, notanın ortalama perdesine göre (vibratonun merkezi); anlık titreme cezalandırılmaz
-  if (Math.abs(V.centsAvg) <= DF().tol && V.raw >= -0.5 && V.raw <= G.nNotes - 0.5) {
-    // yeni notaya kilitlenmek için ses durağan olmalı (kayan ses / konuşma notadan geçerken yakalanmasın)
-    const steady = V.span < 0.6;
-    if (V.cand === n) V.candT = steady ? V.candT + dt : 0; else { V.cand = n; V.candT = 0; }
-    if (V.candT >= 0.08 || V.lock === n) { V.lock = n; V.offT = 0; }
-    else V.offT += dt;
-  } else { V.cand = -1; V.candT = 0; V.offT += dt; }
-  V.locked = V.lock >= 0 && V.offT < 0.4;   // nota geçişinde (kayarak giriş) eski çizgide bekler
-  V.deg = V.locked ? V.lock : V.raw;
+  /* Kuş sesini okla aynı anda izler (gecikme yok). Nota tolerans içindeyse (vibratonun merkezine göre)
+     kuş o notanın çizgisine tam oturur ve parlar; değilse gri kalır ve nota toplayamaz. */
+  V.locked = Math.abs(V.centsAvg) <= DF().tol && V.raw >= -0.5 && V.raw <= G.nNotes - 0.5;
+  V.lock = V.locked ? n : -1;
+  V.deg = V.locked ? n : V.raw;
 }
 function demoVoice() {
   const c = G.coins.find(c => !c.taken && c.x > G.x - 12 && c.x < G.x + BEAT * 1.3);
@@ -389,16 +379,11 @@ function update(dt) {
   // fizik
   const prev = P.d;
   const support = demo || P.inv > 0 || !overGap(G.x);
-  if (V.on && V.locked) {
-    P.d += (V.deg - P.d) * (1 - Math.exp(-dt * 22));       // tutturulan notanın çizgisine otur
+  if (V.on) {
+    P.d += (V.deg - P.d) * (1 - Math.exp(-dt * 90));       // okla senkron (~10 ms yumuşatma)
     P.v = (P.d - prev) / Math.max(dt, 1e-3);
     if (P.d < -1 && support) P.d = -1;
     P.ground = false;
-  } else if (V.on) {
-    // ses var ama nota tutmuyor: yükselme yok, yavaşça alçal
-    P.v = Math.max(Math.min(P.v, 0) - 6 * dt, -1.6); P.d += P.v * dt;
-    if (support && P.d <= -1) { P.d = -1; P.v = 0; P.ground = true; } else P.ground = false;
-    if (!support && P.d < -2.8) { hurt(); P.d = 1.2; P.v = 0; }
   } else {
     P.v -= 26 * dt; P.d += P.v * dt;
     if (support && P.d <= -1) { if (!P.ground && P.v < -3) { P.squash = 1; burst(G.x, groundY, '#ffffff88', 5); } P.d = -1; P.v = 0; P.ground = true; }
@@ -416,10 +401,18 @@ function update(dt) {
   // notalar
   for (const c of G.coins) {
     if (c.taken || c.missed) continue;
-    if (c.x < G.x - R - 14) { c.missed = true; if (!demo) G.combo = 0; continue; }
-    if (Math.abs(c.x - G.x) < R + 12 && Math.abs(yOf(c.d) - py) < R + slot * 0.32) {
+    // nota ancak o nota tutturulmuşken (kuş parlarken) toplanır; “Tam” notanın üstünden geçerken
+    // yakalanan en iyi perdeye göre verilir (notaya kayarak girmek cezalandırılmaz)
+    const inWin = Math.abs(c.x - G.x) < R + 12;
+    if (inWin && Math.abs(yOf(c.d) - py) < R + slot * 0.32 && (demo || (V.locked && V.lock === c.d)))
+      c.best = Math.min(c.best ?? 999, demo ? 0 : Math.abs(V.centsAvg));
+    if (c.best === undefined || (inWin && G.x < c.x - 2)) {
+      if (c.x < G.x - R - 14) { c.missed = true; if (!demo) G.combo = 0; }
+      continue;
+    }
+    {
       c.taken = true; if (demo) continue;
-      const perfect = V.on && V.locked && V.lock === c.d && Math.abs(V.centsAvg) <= DF().tol / 2;
+      const perfect = c.best <= DF().tol / 2;
       G.combo++; G.bestCombo = Math.max(G.bestCombo, G.combo); G.notes++; c.song.got++;
       const mult = Math.min(4, 1 + Math.floor(G.combo / 8));
       const pts = (perfect ? 25 : 10) * mult; G.score += pts;
@@ -610,7 +603,13 @@ function draw() {
 
 function drawHero(x, y, next) {
   if (P.inv > 0 && G.state === 'play' && Math.floor(P.inv * 12) % 2) ctx.globalAlpha = 0.4;
+  const off = G.state === 'play' && V.on && !V.locked;   // ses var ama nota tutmuyor
   ctx.save(); ctx.translate(x, y);
+  if (G.state === 'play' && V.on && V.locked) {         // nota tuttu: notanın renginde hale
+    ctx.save(); ctx.shadowColor = COLORS[V.lock]; ctx.shadowBlur = 18; ctx.strokeStyle = COLORS[V.lock]; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(0, 0, R + 6 + Math.sin(G.t * 12) * 1.5, 0, 6.28); ctx.stroke(); ctx.restore();
+  }
+  if (off) ctx.globalAlpha *= 0.55;
   // gölge
   ctx.save(); ctx.globalAlpha *= 0.3; ctx.fillStyle = '#000'; const gh = Math.max(0.3, 1 - (groundY - R - y) / 300);
   ctx.beginPath(); ctx.ellipse(0, groundY - y, R * gh, 4 * gh, 0, 0, 6.28); ctx.fill(); ctx.restore();
