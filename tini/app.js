@@ -19,7 +19,7 @@ const SCALES={
   dorian:{ad:'Dorian',n:[0,2,3,5,7,9,10]},
 };
 const TH_TONES={klasik:'Klasik',vokal:'Vokal',cam:'Cam'};
-const S={mode:'strings',song:'twinkle',songRec:false,songMic:false,key:0,scale:'major',strTone:'elektro',strQuant:true,quant:true,thTone:'klasik',drone:false,reverb:.35,vol:.85,mic:false,video:true,facing:'user'};
+const S={mode:'strings',song:'twinkle',songEasy:false,songRec:false,songMic:false,key:0,scale:'major',strTone:'elektro',strQuant:true,quant:true,thTone:'klasik',drone:false,reverb:.35,vol:.85,mic:false,video:true,facing:'user'};
 try{const old=JSON.parse(localStorage.getItem('havaOrkestrasi')||'{}');for(const k of['key','scale','strTone','strQuant','quant','reverb','vol','mic','video','facing'])if(k in old)S[k]=old[k]}catch(e){}
 try{Object.assign(S,JSON.parse(localStorage.getItem('tini')||'{}'))}catch(e){}
 if(!SCALES[S.scale])S.scale='major';if(!TH_TONES[S.thTone])S.thTone='klasik';if(!['strings','theremin'].includes(S.mode))S.mode='strings';S.drone=false;
@@ -202,53 +202,48 @@ function drawStrings(){
 }
 function hint(lines){ctx.save();ctx.textAlign='center';ctx.textBaseline='middle';lines.forEach((l,i)=>{ctx.fillStyle=i?'#8f8f8f':'#dcdcdc';ctx.font=`${i?400:500} ${i?14:16}px ${FONT}`;ctx.fillText(l,W/2,H/2-(lines.length-1)*12+i*26)});ctx.restore()}
 
-/* ---------- theremin: çimdikle çal ----------
-   Açık el = imleç (sessiz) · başparmak ile işaret parmağı birleşince çalar
-   birleşikken yukarı-aşağı = kayarak geçer · bırak = sus · sağa-sola = ses rengi · titreme = vibrato
-   Her el ayrı bir ses. Dokunmatikte parmak basılıyken çalar. */
+/* ---------- theremin: parmaklarla çal ----------
+   Başparmağını bir parmağına değdir = o parmağın notası çalar; değdikçe sürer, ayırınca biter.
+   Eller piyanodaki gibi: sol el serçeden işarete Do Re Mi Fa, sağ el işaretten serçeye Sol La Si Do.
+   Çalarken eli yukarı-aşağı oynat = ses bükülür · eli titret = vibrato.
+   Dokunmatik ve klavye (A S D F J K L Ş): alttaki 8 tuş. */
 const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
-const thVoices=new Map();let thOrder=0;
-function thZones(){return SONG.on?SONG.zones:scaleNotes(10,60+S.key)}
-function thArea(){return{t:topY()+70,b:botY()-(SONG.on?64:24)}}
-function zoneH(){const{t,b}=thArea();return(b-t)/thZones().length}
-function zoneAt(y){const z=thZones(),{t,b}=thArea();return clamp(Math.floor((b-y)/((b-t)/z.length)),0,z.length-1)}
-function zoneY(i){return thArea().b-(i+.5)*zoneH()}
-function zoneOf(m){return thZones().indexOf(m)}
-function contPitch(y){const z=thZones(),{t,b}=thArea(),f=clamp((b-y)/(b-t)*z.length-.5,0,z.length-1),i=Math.min(z.length-2,Math.floor(f));return z[i]+(z[i+1]-z[i])*(f-i)}
-function thVoice(id){let v=thVoices.get(id);if(!v){v={id,order:thOrder++,syn:null,zone:null,lastZone:null,pinch:false,smooth:null,m:0,x:.5,cur:null,trail:[],rip:[],seen:0,playing:false};thVoices.set(id,v)}return v}
-function thStopAll(){for(const v of thVoices.values())if(v.syn)v.syn.stop();thVoices.clear()}
-function thereminOff(){thStopAll()}
-// bir el ya da parmak için: konum, çimdik durumu, ses rengi
-function thUpdate(v,p,pinched,color,now){
-  v.cur=p;v.seen=now;v.x=color;const zi=zoneAt(p.y);
-  if(v.zone==null||!v.playing&&!pinched)v.zone=zi;else if(zi!==v.zone&&Math.abs(p.y-zoneY(v.zone))>zoneH()*.72)v.zone=zi;
-  const raw=contPitch(p.y);v.smooth=v.smooth==null?raw:v.smooth+(raw-v.smooth)*.2;const wig=clamp((raw-v.smooth)*1.4,-.6,.6);
-  const z=thZones(),m=(S.quant?z[v.zone]:v.smooth)+wig,start=pinched&&!v.playing,slide=pinched&&v.playing&&v.zone!==v.lastZone;
-  if(pinched){if(!v.syn&&ac)v.syn=thSynth(S.thTone);if(v.syn){v.syn.pitch(m,start?.004:.03);v.syn.color(color);v.syn.vibrato(S.thTone==='vokal'?8:0);v.syn.level(.85)}
-    if(start||slide){songAttack(z[v.zone],v);energy=Math.min(1,energy+.05);if(start){v.rip.push({t:now,x:p.x,y:p.y});burst(p.x,p.y,6)}}}
-  else if(v.syn)v.syn.level(0);
-  v.playing=pinched;v.lastZone=v.zone;v.m=m;
-  if(pinched){v.trail.push({x:p.x,y:p.y,t:now});if(v.trail.length>60)v.trail.shift()}}
+const FING=[8,12,16,20],FN=['işaret','orta','yüzük','serçe'],KEYMAP={L:[3,2,1,0],R:[4,5,6,7]},KB='asdfjklş';
+const held=new Map(),fingSt={},keyGlow=new Array(8).fill(0);
+function keyNotes(){return SONG.on?SONG.keys:scaleNotes(8,60+S.key)}
+function keyFinger(i){return i<4?['L',KEYMAP.L.indexOf(i)]:['R',KEYMAP.R.indexOf(i)]}
+function keyRect(i){const sm=W<640,gap=sm?4:8,mid=sm?14:32,kh=sm?52:60,w=Math.min(96,(W-24-mid-gap*6)/8),tw=w*8+gap*6+mid,x0=(W-tw)/2;return{x:x0+i*(w+gap)+(i>=4?mid:0),y:botY()-kh-4,w,h:kh}}
+function keyAt(x,y){for(let i=0;i<8;i++){const r=keyRect(i);if(x>=r.x-2&&x<=r.x+r.w+2&&y>=r.y-14&&y<=r.y+r.h+6)return i}return -1}
+function noteOn(src,k,ref){if(!ac||k<0)return;noteOff(src);const p=songPress(k);const syn=thSynth(S.thTone);syn.pitch(p.m,.001);syn.color(.55);syn.vibrato(S.thTone==='vokal'?8:0);syn.level(.8);
+  held.set(src,{k:p.k,m:p.m,syn,ref,bend:0});keyGlow[p.k]=1;energy=Math.min(1,energy+.05);const r=keyRect(p.k);burst(r.x+r.w/2,r.y,8,.7)}
+function noteOff(src){const n=held.get(src);if(!n)return;n.syn.stop();held.delete(src)}
+function thStopAll(){for(const s of[...held.keys()])noteOff(s)}
+function thereminOff(){thStopAll();for(const k of Object.keys(fingSt))delete fingSt[k]}
 function thereminFrame(){
   if(S.mode!=='theremin')return;const now=performance.now(),live=new Set();
-  for(const h of hands){const id='h'+h.id,v=thVoice(id);live.add(id);
-    const p={x:(h.pts[4].x+h.pts[8].x)/2,y:(h.pts[4].y+h.pts[8].y)/2},pr=dist(h.pts[4],h.pts[8])/h.size;
-    v.pinch=v.pinch?pr<.42:pr<.26&&h.ext[0]>.85;v.size=h.size;thUpdate(v,p,v.pinch,clamp(p.x/W,0,1),now)}
-  for(const[pid,p]of ptr){const id='p'+pid,v=thVoice(id);live.add(id);v.size=40;thUpdate(v,{x:p.x,y:p.y},true,clamp(p.x/W,0,1),now)}
-  for(const v of[...thVoices.values()])if(!live.has(v.id)){if(v.syn)v.syn.level(0);v.playing=false;if(now-v.seen>800){if(v.syn)v.syn.stop();thVoices.delete(v.id)}}
+  for(const h of hands){const id=String(h.id),st=fingSt[id]||(fingSt[id]={f:[false,false,false,false],sm:null});live.add(id);
+    const palm=[0,5,9,13,17].reduce((a,i)=>({x:a.x+h.pts[i].x/5,y:a.y+h.pts[i].y/5}),{x:0,y:0});
+    st.sm=st.sm==null?palm.y:st.sm+(palm.y-st.sm)*.25;const wig=clamp(-(palm.y-st.sm)/h.size*6,-.6,.6);
+    let best=-1,mn=9;h.pr.forEach((r,f)=>{if(r<mn){mn=r;best=f}});
+    for(let f=0;f<4;f++){const src='h'+id+'_'+f,on=st.f[f]?h.pr[f]<.45:(f===best&&h.pr[f]<.3&&h.ext[f]>.75);
+      if(on&&!st.f[f])noteOn(src,KEYMAP[h.role][f],{y0:palm.y,size:h.size});else if(!on&&st.f[f])noteOff(src);st.f[f]=on;
+      const n=held.get(src);if(n&&n.ref){const dy=(n.ref.y0-palm.y)/h.size;n.bend=Math.sign(dy)*clamp((Math.abs(dy)-.45)/1.2,0,1)*2;n.syn.pitch(n.m+n.bend+wig,.03)}}}
+  for(const id of Object.keys(fingSt))if(!live.has(id)){for(let f=0;f<4;f++)noteOff('h'+id+'_'+f);delete fingSt[id]}
+  for(let i=0;i<8;i++)keyGlow[i]*=.93;
   songTick(now);
 }
 
-/* ---------- Ezgi: şarkıyı theremin ile çal ----------
-   Notalar sağdan çizgiye akar. Çizgideki notanın şeridinde çimdikle. Şarkı seni bekler, hızına uyar,
-   doğru notada eşlik çalar, altta söylenecek heceler ilerler. Hepsi kamu malı ezgiler. */
+/* ---------- Ezgi: şarkıyı parmaklarınla çal ----------
+   Notalar yukarıdan tuşlara iner; inen notanın parmağı elinde parlar. Şarkı seni bekler, hızına uyar,
+   doğru notada eşlik çalar, altta söylenecek heceler ilerler. Kolay modda hangi parmağı değdirsen
+   sıradaki nota çalar. Hepsi kamu malı ezgiler. */
 const SONGS=[
   {id:'twinkle',ad:'Küçük Yıldız',by:'Geleneksel',lv:1,bpm:88,
    n:'60::C 60 67 67 69::F 69 67:2:C / 65::F 65 64::C 64 62::G 62 60:2:C / 67::C 67 65::F 65 64::C 64 62:2:G / 67::C 67 65::F 65 64::C 64 62:2:G / 60::C 60 67 67 69::F 69 67:2:C / 65::F 65 64::C 64 62::G 62 60:2:C'},
   {id:'mary',ad:'Mary\'nin Kuzusu',by:'Geleneksel',lv:1,bpm:92,
    n:'64::C 62 60 62 64 64 64:2 / 62::G 62 62:2 64::C 67 67:2 / 64::C 62 60 62 64 64 64 64 / 62::G 62 64 62 60:4:C'},
   {id:'jacques',ad:'Frère Jacques',by:'Geleneksel',lv:1,bpm:96,
-   n:'60::C 62 64 60 60 62 64 60 / 64::C 65 67:2 64 65 67:2 / 67:.5:C 69:.5 67:.5 65:.5 64 60 67:.5 69:.5 67:.5 65:.5 64 60 / 60::C 55::G 60:2:C 60 55::G 60:2:C'},
+   n:'60::C 62 64 60 60 62 64 60 / 64::C 65 67:2 64 65 67:2 / 67:.5:C 69:.5 67:.5 65:.5 64 60 67:.5 69:.5 67:.5 65:.5 64 60 / 60::C 67::G 60:2:C 60 67::G 60:2:C'},
   {id:'ode',ad:'Neşeye Övgü',by:'Beethoven',lv:2,bpm:96,
    n:'64::C 64 65 67 67::G 65 64 62 / 60::C 60 62 64 64:1.5:G 62:.5 62:2 / 64::C 64 65 67 67::G 65 64 62 / 60::C 60 62 64 62:1.5:G 60:.5 60:2:C'},
   {id:'birthday',ad:'Mutlu Yıllar',by:'Geleneksel',lv:2,bpm:100,
@@ -258,35 +253,33 @@ const SONGS=[
    n:'64::C 64 64:2 64 64 64:2 / 64 67 60:1.5 62:.5 64:4 / 65::F 65 65:1.5 65:.5 65 64::C 64 64:.5 64:.5 / 64::D 62 62 64 62:2:G 67:2 / 64::C 64 64:2 64 64 64:2 / 64 67 60:1.5 62:.5 64:4 / 65::F 65 65:1.5 65:.5 65 64::C 64 64:.5 64:.5 / 67::G 67 65 62 60:4:C'},
 ];
 const CHORD_ROOT={C:0,D:2,E:4,F:5,G:7,A:9,B:11},MAJ=[0,2,4,5,7,9,11];
-const SONG={on:false,sg:null,notes:[],zones:[],i:0,pos:0,rate:1,wait:0,hits:0,miss:0,run:0,best:0,t0:0,flash:[],trail:[]};
+const SONG={on:false,sg:null,notes:[],keys:[],i:0,pos:0,rate:1,wait:0,hits:0,miss:0,run:0,best:0,t0:0,last:0,flash:[]};
 function parseSong(sg){const lyr=sg.lyr?sg.lyr.split('/').map(l=>l.trim().split(/\s+/)):null,out=[];let b=0;
   sg.n.split('/').forEach((ln,li)=>ln.trim().split(/\s+/).forEach((tok,ti)=>{const[m,d,c]=tok.split(':');const beats=d?+d:1;out.push({m:+m+S.key,b,d:beats,c:c||null,line:li,w:lyr?lyr[li][ti]:null,hit:false});b+=beats}));return out}
 function padChord(c){if(!ac||!c)return;const r=CHORD_ROOT[c[0]]+S.key,mi=c[1]==='m',n=ac.currentTime,g=ac.createGain(),lp=ac.createBiquadFilter();lp.type='lowpass';lp.frequency.value=1300;lp.connect(g);g.connect(bus);
-  g.gain.setValueAtTime(0,n);g.gain.linearRampToValueAtTime(.13,n+.06);g.gain.setTargetAtTime(0,n+1.1,.45);
+  g.gain.setValueAtTime(0,n);g.gain.linearRampToValueAtTime(.12,n+.06);g.gain.setTargetAtTime(0,n+1.1,.45);
   [[36+r,.8,'sine'],[48+r,.35,'triangle'],[52+r-(mi?1:0),.3,'triangle'],[55+r,.3,'triangle']].forEach(([m,a,t])=>{const o=ac.createOscillator(),og=ac.createGain();o.type=t;o.frequency.value=mtof(m);og.gain.value=a;o.connect(og);og.connect(lp);o.start(n);o.stop(n+3.2)});
   setTimeout(()=>{try{g.disconnect()}catch(e){}},3500)}
-const ppb=()=>clamp(W*.1,56,110),lineX=()=>W*(W<640?.2:.26);
+// basılan tuşa göre çalınacak sesi ve puanı belirler
+function songPress(k){const keys=keyNotes();if(!SONG.on)return{m:keys[k],k};const want=SONG.notes[SONG.i];if(!want||SONG.pos<want.b-1.5)return{m:keys[k],k};
+  const lane=keys.indexOf(want.m);
+  if(S.songEasy||k===lane){if(SONG.wait>.4)SONG.rate=Math.max(.55,SONG.rate*.9);else if(SONG.wait<.1)SONG.rate=Math.min(1,SONG.rate+.06);
+    SONG.wait=0;SONG.pos=Math.max(SONG.pos,want.b);want.hit=true;SONG.hits++;SONG.run++;SONG.best=Math.max(SONG.best,SONG.run);if(want.c)padChord(want.c);SONG.i++;if(SONG.i>=SONG.notes.length)songFinish();return{m:want.m,k:lane}}
+  SONG.miss++;SONG.run=0;SONG.flash.push({k,t:performance.now()});return{m:keys[k],k}}
 async function songStart(id){initAudio();const sg=SONGS.find(x=>x.id===id)||SONGS[0];S.song=sg.id;save();
-  const notes=parseSong(sg),used=new Set(notes.map(n=>n.m)),lo=Math.min(...used),hi=Math.max(...used),zones=[];
-  for(let m=lo;m<=hi;m++)if(used.has(m)||MAJ.includes(((m-S.key)%12+12)%12))zones.push(m);
-  thStopAll();Object.assign(SONG,{on:true,sg,notes,zones,i:0,pos:notes[0].b-4,rate:1,wait:0,hits:0,miss:0,run:0,best:0,t0:performance.now(),flash:[],trail:[],last:performance.now()});
+  const notes=parseSong(sg),scale=[];for(let m=36;m<96;m++)if(MAJ.includes(((m-S.key)%12+12)%12))scale.push(m);
+  const lo=Math.min(...notes.map(n=>n.m)),keys=scale.slice(scale.indexOf(lo),scale.indexOf(lo)+8);
+  thStopAll();Object.assign(SONG,{on:true,sg,notes,keys,i:0,pos:notes[0].b-4,rate:1,wait:0,hits:0,miss:0,run:0,best:0,t0:performance.now(),last:performance.now(),flash:[]});
   $('#songBtn small').textContent='Bitir';$('#result').hidden=true;
   if(S.songRec&&!(mrec&&mrec.state==='recording'))await startRec(S.songMic)}
 function songStop(){if(!SONG.on)return;SONG.on=false;thStopAll();$('#songBtn small').textContent='Şarkı';if(mrec&&mrec.state==='recording')stopRec()}
-function songAttack(m,v){if(!SONG.on)return;const want=SONG.notes[SONG.i];if(!want)return;
-  if(SONG.pos<want.b-1.2)return;   // daha erken: deneme sayılır
-  if(m===want.m){if(SONG.wait>.4)SONG.rate=Math.max(.55,SONG.rate*.9);else if(SONG.wait<.1)SONG.rate=Math.min(1,SONG.rate+.06);
-    SONG.wait=0;SONG.pos=Math.max(SONG.pos,want.b);want.hit=true;SONG.hits++;SONG.run++;SONG.best=Math.max(SONG.best,SONG.run);if(want.c)padChord(want.c);
-    burst(lineX(),zoneY(zoneOf(m)),12,.9);SONG.i++;if(SONG.i>=SONG.notes.length)songFinish()}
-  else{SONG.miss++;SONG.run=0;SONG.flash.push({z:zoneOf(m),t:performance.now()})}}
-function songTick(now){if(!SONG.on){return}const dt=Math.min(.1,(now-SONG.last)/1000);SONG.last=now;const want=SONG.notes[SONG.i],adv=dt*SONG.sg.bpm/60*SONG.rate;
-  if(want){if(SONG.pos+adv>=want.b){SONG.pos=want.b;SONG.wait+=dt}else SONG.pos+=adv}else SONG.pos+=adv;
-  const v=[...thVoices.values()].sort((a,b)=>a.order-b.order).find(v=>now-v.seen<200);SONG.trail.push({pos:SONG.pos,y:v&&v.cur?v.cur.y:null,on:!!(v&&v.playing)});if(SONG.trail.length>240)SONG.trail.shift()}
+function songTick(now){if(!SONG.on)return;const dt=Math.min(.1,(now-SONG.last)/1000);SONG.last=now;const want=SONG.notes[SONG.i],adv=dt*SONG.sg.bpm/60*SONG.rate;
+  if(want){if(SONG.pos+adv>=want.b){SONG.pos=want.b;SONG.wait+=dt}else SONG.pos+=adv}else SONG.pos+=adv}
 function songFinish(){const sg=SONG.sg,acc=Math.round(100*SONG.hits/Math.max(1,SONG.hits+SONG.miss)),sec=Math.round((performance.now()-SONG.t0)/1000),best=SONG.best;
-  let rec={};try{rec=JSON.parse(localStorage.getItem('tiniBest')||'{}')}catch(e){}if(!(rec[sg.id]>=acc)){rec[sg.id]=acc;try{localStorage.setItem('tiniBest',JSON.stringify(rec))}catch(e){}}
+  let rec={};try{rec=JSON.parse(localStorage.getItem('tiniBest')||'{}')}catch(e){}if(!S.songEasy&&!(rec[sg.id]>=acc)){rec[sg.id]=acc;try{localStorage.setItem('tiniBest',JSON.stringify(rec))}catch(e){}}
   setTimeout(()=>{songStop();burst(W/2,H*.4,30,1.2);const stars=acc>=95?3:acc>=80?2:1;
-    $('#resSong').textContent=sg.ad;$('#resTitle').textContent=['','Güzel','Çok iyi','Kusursuz'][stars];$('#resStars').textContent='★'.repeat(stars)+'☆'.repeat(3-stars);
-    $('#resAcc').textContent=acc+'%';$('#resCombo').textContent=best;$('#resTime').textContent=`${Math.floor(sec/60)}:${String(sec%60).padStart(2,'0')}`;$('#result').hidden=false},1100)}
+    $('#resSong').textContent=sg.ad+(S.songEasy?' · kolay':'');$('#resTitle').textContent=['','Güzel','Çok iyi','Kusursuz'][stars];$('#resStars').textContent='★'.repeat(stars)+'☆'.repeat(3-stars);
+    $('#resAcc').textContent=acc+'%';$('#resCombo').textContent=best;$('#resTime').textContent=`${Math.floor(sec/60)}:${String(sec%60).padStart(2,'0')}`;$('#result').hidden=false},1300)}
 function songOpen(){const list=$('#songList');list.innerHTML='';let best={};try{best=JSON.parse(localStorage.getItem('tiniBest')||'{}')}catch(e){}
   for(const sg of SONGS){const li=document.createElement('li'),bt=document.createElement('button');
     bt.innerHTML=`<span class="t"><b></b><span></span></span><span class="lv">${'●'.repeat(sg.lv)}${'○'.repeat(3-sg.lv)}</span><span class="best">${best[sg.id]!=null?best[sg.id]+'%':''}</span><span class="pl"><svg><use href="#i-play"/></svg></span>`;
@@ -294,63 +287,54 @@ function songOpen(){const list=$('#songList');list.innerHTML='';let best={};try{
   $('#songs').hidden=false}
 
 /* ---------- theremin çizimi ---------- */
-const TH_COL=[[255,90,54],[255,214,196]];
 function drawTheremin(){
-  const z=thZones(),{t,b}=thArea(),zh=zoneH(),now=performance.now(),vs=[...thVoices.values()].sort((a,c)=>a.order-c.order),want=SONG.on?SONG.notes[SONG.i]:null;
-  const playing=new Map();vs.forEach(v=>{if(v.playing&&now-v.seen<200)playing.set(v.zone,v)});
-  const hover=new Set(vs.filter(v=>!v.playing&&v.cur&&now-v.seen<200).map(v=>v.zone));
-  ctx.save();ctx.textBaseline='middle';
-  // nota şeritleri
-  z.forEach((m,i)=>{const y0=b-(i+1)*zh,root=((m-S.key)%12+12)%12===0,pl=playing.has(i),tg=want&&want.m===m;
-    ctx.fillStyle=pl?'rgba(255,90,54,.2)':tg?'rgba(255,90,54,.07)':hover.has(i)?'rgba(255,255,255,.06)':i%2?'rgba(255,255,255,.018)':'rgba(255,255,255,0)';ctx.fillRect(0,y0,W,zh);
-    ctx.strokeStyle='rgba(255,255,255,.06)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(0,y0);ctx.lineTo(W,y0);ctx.stroke();
-    ctx.textAlign='left';ctx.font=`${pl||tg?600:500} ${Math.min(15,zh*.36)}px ${MONO}`;ctx.fillStyle=pl||tg?ACC:root?'#d0d0d0':'#707070';ctx.fillText(nameOf(m),14,y0+zh/2)});
-  // yanlış nota
-  SONG.flash=SONG.flash.filter(f=>now-f.t<350);for(const f of SONG.flash){if(f.z<0)continue;ctx.fillStyle=`rgba(255,255,255,${.12*(1-(now-f.t)/350)})`;ctx.fillRect(0,b-(f.z+1)*zh,W,zh)}
-  if(SONG.on)drawSongLane(z,zh,b,now);
-  // ışık izi (serbest çalışta elin arkasında)
-  ctx.lineCap='round';ctx.lineJoin='round';
-  if(!SONG.on)vs.forEach((v,vi)=>{const[r,g,bb]=TH_COL[vi%2];for(let pass=0;pass<2;pass++)for(let i=1;i<v.trail.length;i++){const a=v.trail[i-1],c=v.trail[i],age=(now-c.t)/1200;if(age>1||c.t-a.t>120)continue;
-    ctx.strokeStyle=pass?`rgba(255,255,255,${(1-age)*.6})`:`rgba(${r},${g},${bb},${(1-age)*.45})`;ctx.lineWidth=pass?1.4:3+12*(1-age);ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(c.x,c.y);ctx.stroke()}});
-  // imleçler
-  vs.forEach((v,vi)=>{if(!v.cur||now-v.seen>200)return;const[r,g,bb]=TH_COL[vi%2],P=v.cur;
-    v.rip=v.rip.filter(q=>now-q.t<600);for(const q of v.rip){const a=(now-q.t)/600;ctx.strokeStyle=`rgba(255,255,255,${(1-a)*.7})`;ctx.lineWidth=2*(1-a);ctx.beginPath();ctx.arc(q.x,q.y,10+a*44,0,7);ctx.stroke()}
-    if(v.playing){const gr=ctx.createRadialGradient(P.x,P.y,0,P.x,P.y,46);gr.addColorStop(0,`rgba(${r},${g},${bb},.75)`);gr.addColorStop(1,`rgba(${r},${g},${bb},0)`);ctx.fillStyle=gr;ctx.beginPath();ctx.arc(P.x,P.y,46,0,7);ctx.fill();ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(P.x,P.y,6,0,7);ctx.fill()}
-    else{ctx.strokeStyle='rgba(255,255,255,.7)';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(P.x,P.y,13,0,7);ctx.stroke();ctx.fillStyle='rgba(255,255,255,.7)';ctx.beginPath();ctx.arc(P.x,P.y,2.5,0,7);ctx.fill()}
-    ctx.textAlign='left';ctx.font=`${v.playing?600:500} 13px ${FONT}`;ctx.fillStyle=v.playing?'#fff':'#9a9a9a';ctx.fillText(nameOf(z[v.zone]),P.x+22,P.y)});
-  // üstte çalan nota
-  if(!SONG.on){const pl=vs.filter(v=>v.playing&&now-v.seen<200);if(pl.length){ctx.textAlign='center';ctx.fillStyle='#ededed';ctx.font=`600 30px ${MONO}`;ctx.fillText(pl.map(v=>nameOf(z[v.zone])).join('  ·  '),W/2,topY()+30)}
-    else if(!vs.some(v=>now-v.seen<300))drawThHint()}
+  const keys=keyNotes(),now=performance.now(),heldK=new Set([...held.values()].map(n=>n.k)),want=SONG.on?SONG.notes[SONG.i]:null,lane=want?keys.indexOf(want.m):-1;
+  ctx.save();
+  // ışık sütunları
+  for(let i=0;i<8;i++){const r=keyRect(i),g=heldK.has(i)?1:keyGlow[i];if(g<.02)continue;const hh=H*.42*g,gr=ctx.createLinearGradient(0,r.y,0,r.y-hh);gr.addColorStop(0,`rgba(255,90,54,${.32*g})`);gr.addColorStop(1,'rgba(255,90,54,0)');ctx.fillStyle=gr;ctx.fillRect(r.x,r.y-hh,r.w,hh)}
+  if(SONG.on)drawHighway(keys,now,lane);
+  // tuşlar
+  SONG.flash=SONG.flash.filter(f=>now-f.t<300);
+  for(let i=0;i<8;i++){const r=keyRect(i),on=heldK.has(i),tg=i===lane&&!S.songEasy,fl=SONG.flash.some(f=>f.k===i),pulse=tg&&SONG.pos>=want.b?.5+.5*Math.sin(now/110):0;
+    rr(r.x,r.y,r.w,r.h,12);ctx.fillStyle=on?'#ededed':fl?'rgba(255,255,255,.25)':tg?`rgba(255,90,54,${.22+pulse*.25})`:'rgba(255,255,255,.06)';ctx.fill();
+    ctx.strokeStyle=tg?ACC:'rgba(255,255,255,.12)';ctx.lineWidth=tg?2:1;ctx.stroke();
+    ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle=on?'#0a0a0b':tg?'#fff':'#dcdcdc';ctx.font=`600 ${W<640?14:16}px ${MONO}`;ctx.fillText(nameOf(keys[i]),r.x+r.w/2,r.y+r.h*.42);
+    const[hd,f]=keyFinger(i);ctx.font=`500 ${W<640?9:10}px ${FONT}`;ctx.fillStyle=on?'#333':'#7a7a7a';ctx.fillText(W<640?FN[f].slice(0,3):(hd==='L'?'sol ':'sağ ')+FN[f],r.x+r.w/2,r.y+r.h*.74)}
+  // parmak ucu etiketleri
+  for(const h of hands){const st=fingSt[String(h.id)];for(let f=0;f<4;f++){const k=KEYMAP[h.role][f],p=h.pts[FING[f]],on=st&&st.f[f],tg=k===lane&&!S.songEasy,txt=nameOf(keys[k]);
+    ctx.font=`600 11px ${MONO}`;const tw=ctx.measureText(txt).width+12,x=p.x-tw/2,y=p.y-30;
+    if(tg){const pulse=.5+.5*Math.sin(now/110);ctx.fillStyle=`rgba(255,90,54,${.25+pulse*.3})`;ctx.beginPath();ctx.arc(p.x,p.y,14+pulse*6,0,7);ctx.fill()}
+    rr(x,y,tw,18,9);ctx.fillStyle=on?ACC:tg?'#fff':'rgba(10,10,11,.75)';ctx.fill();ctx.fillStyle=on?'#fff':tg?'#0a0a0b':'#dcdcdc';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(txt,p.x,y+9.5)}}
+  // üstte çalan notalar
+  if(!SONG.on){const names=[...held.values()].map(n=>nameOf(n.m+n.bend));if(names.length){ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle='#ededed';ctx.font=`600 30px ${MONO}`;ctx.fillText(names.join('  ·  '),W/2,topY()+34)}
+    else if(!hands.length)drawThHint()}
   ctx.restore();
 }
-function drawSongLane(z,zh,b,now){const lx=lineX(),pp=ppb(),{t}=thArea();
-  // çalma çizgisi
-  ctx.strokeStyle='rgba(255,255,255,.35)';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(lx,t);ctx.lineTo(lx,b);ctx.stroke();
-  // senin çaldığın ezgi (çizginin solunda akar)
-  ctx.lineCap='round';for(let i=1;i<SONG.trail.length;i++){const a=SONG.trail[i-1],c=SONG.trail[i];if(a.y==null||c.y==null)continue;const xa=lx-(SONG.pos-a.pos)*pp,xc=lx-(SONG.pos-c.pos)*pp;if(xc<0)continue;
-    ctx.strokeStyle=c.on?'rgba(255,90,54,.7)':'rgba(255,255,255,.12)';ctx.lineWidth=c.on?4:1.5;ctx.beginPath();ctx.moveTo(xa,a.y);ctx.lineTo(Math.max(xc,xa+.5),c.y);ctx.stroke()}
-  // notalar
-  for(let k=Math.max(0,SONG.i-6);k<Math.min(SONG.notes.length,SONG.i+14);k++){const n=SONG.notes[k],x=lx+(n.b-SONG.pos)*pp,w=Math.max(10,n.d*pp-6),zi=zoneOf(n.m);if(x>W+10||x+w<0||zi<0)continue;
-    const y=b-(zi+.5)*zh,hgt=Math.min(26,zh*.52),cur=k===SONG.i;
-    ctx.fillStyle=n.hit?'rgba(255,90,54,.85)':cur?'rgba(255,255,255,.95)':'rgba(255,255,255,.22)';rr(x,y-hgt/2,w,hgt,hgt/2);ctx.fill();
-    if(cur){const pulse=SONG.pos>=n.b?.5+.5*Math.sin(now/110):0;ctx.strokeStyle=`rgba(255,90,54,${.4+pulse*.6})`;ctx.lineWidth=2+pulse*2;rr(x-3,y-hgt/2-3,w+6,hgt+6,hgt/2+3);ctx.stroke()}
-    ctx.fillStyle=n.hit?'#fff':cur?'#0a0a0b':'#cfcfcf';ctx.textAlign='left';ctx.textBaseline='middle';ctx.font=`600 ${Math.min(12,hgt*.5)}px ${FONT}`;if(w>26)ctx.fillText(nameOf(n.m),x+9,y+.5)}
+function drawHighway(keys,now,lane){const r0=keyRect(0),hitY=r0.y-6,top=topY()+92,pp=clamp((hitY-top)/5.5,44,110);
+  for(let i=0;i<8;i++){const r=keyRect(i);ctx.fillStyle=i===lane?'rgba(255,90,54,.05)':i%2?'rgba(255,255,255,.02)':'rgba(255,255,255,.01)';ctx.fillRect(r.x,top,r.w,hitY-top)}
+  ctx.strokeStyle='rgba(255,255,255,.3)';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(keyRect(0).x,hitY);ctx.lineTo(keyRect(7).x+keyRect(7).w,hitY);ctx.stroke();
+  ctx.save();ctx.beginPath();ctx.rect(0,top,W,hitY-top+2);ctx.clip();
+  for(let k=Math.max(0,SONG.i-3);k<Math.min(SONG.notes.length,SONG.i+16);k++){const n=SONG.notes[k],li=keys.indexOf(n.m);if(li<0)continue;const r=keyRect(li),yb=hitY-(n.b-SONG.pos)*pp,hgt=Math.max(16,n.d*pp-6),yt=yb-hgt;if(yb<top)break;
+    const cur=k===SONG.i;rr(r.x+4,yt,r.w-8,hgt,8);ctx.fillStyle=n.hit?`rgba(255,90,54,${clamp(1-(SONG.pos-n.b)/3,0,.85)})`:cur?'#ffffff':'rgba(255,255,255,.28)';ctx.fill();
+    if(cur&&SONG.pos>=n.b){const pulse=.5+.5*Math.sin(now/110);ctx.strokeStyle=`rgba(255,90,54,${.5+pulse*.5})`;ctx.lineWidth=2+pulse*2;rr(r.x+1,yt-3,r.w-2,hgt+6,10);ctx.stroke()}
+    if(hgt>18){ctx.fillStyle=cur?'#0a0a0b':n.hit?'#fff':'#cfcfcf';ctx.textAlign='center';ctx.textBaseline='bottom';ctx.font=`600 11px ${FONT}`;ctx.fillText(n.w||nameOf(n.m),r.x+r.w/2,yb-4)}}
+  ctx.restore();
   // başlık, ilerleme, seri
-  const pr=SONG.i/SONG.notes.length;ctx.textAlign='left';ctx.font=`500 13px ${FONT}`;ctx.fillStyle='#bdbdbd';ctx.fillText(SONG.sg.ad,14,topY()+22);
-  ctx.fillStyle='rgba(255,255,255,.1)';ctx.fillRect(14,topY()+36,120,2);ctx.fillStyle='#ededed';ctx.fillRect(14,topY()+36,120*pr,2);
-  if(SONG.rate<.98){ctx.fillStyle='#7a7a7a';ctx.font=`500 11px ${MONO}`;ctx.fillText(`hız %${Math.round(SONG.rate*100)}`,14,topY()+52)}
-  if(SONG.run>=3){ctx.textAlign='right';ctx.font=`600 26px ${MONO}`;ctx.fillStyle=SONG.run>=10?ACC:'#ededed';ctx.fillText(SONG.run,W-16,topY()+28);ctx.font=`500 11px ${FONT}`;ctx.fillStyle='#8f8f8f';ctx.fillText('seri',W-16,topY()+48)}
+  const pr=SONG.i/SONG.notes.length;ctx.textAlign='left';ctx.textBaseline='middle';ctx.font=`500 13px ${FONT}`;ctx.fillStyle='#bdbdbd';ctx.fillText(SONG.sg.ad+(S.songEasy?' · kolay':''),14,topY()+18);
+  ctx.fillStyle='rgba(255,255,255,.1)';ctx.fillRect(14,topY()+32,120,2);ctx.fillStyle='#ededed';ctx.fillRect(14,topY()+32,120*pr,2);
+  if(SONG.rate<.98){ctx.fillStyle='#7a7a7a';ctx.font=`500 11px ${MONO}`;ctx.fillText(`hız %${Math.round(SONG.rate*100)}`,14,topY()+46)}
+  if(SONG.run>=3){ctx.textAlign='right';ctx.font=`600 26px ${MONO}`;ctx.fillStyle=SONG.run>=10?ACC:'#ededed';ctx.fillText(SONG.run,W-16,topY()+22);ctx.font=`500 11px ${FONT}`;ctx.fillStyle='#8f8f8f';ctx.fillText('seri',W-16,topY()+42)}
   // sözler
-  const cur=SONG.notes[Math.min(SONG.i,SONG.notes.length-1)],line=SONG.notes.filter(n=>n.line===cur.line),ly=b+34;
+  const cur=SONG.notes[Math.min(SONG.i,SONG.notes.length-1)],line=SONG.notes.filter(n=>n.line===cur.line),ly=topY()+70;
   ctx.font=`500 17px ${FONT}`;const words=line.map(n=>n.w||nameOf(n.m)),gap=10,ws=words.map(w=>ctx.measureText(w).width),tot=ws.reduce((a,c)=>a+c,0)+gap*(words.length-1),sc=Math.min(1,(W-28)/tot);
   ctx.save();ctx.translate(W/2-tot*sc/2,ly);ctx.scale(sc,sc);let x=0;line.forEach((n,k)=>{const idx=SONG.notes.indexOf(n);ctx.fillStyle=idx<SONG.i?'#ededed':idx===SONG.i?ACC:'#5a5a5a';ctx.textAlign='left';ctx.fillText(words[k],x,0);x+=ws[k]+gap});ctx.restore();
-  if(SONG.i===0&&SONG.pos<SONG.notes[0].b){ctx.textAlign='center';ctx.font=`500 14px ${FONT}`;ctx.fillStyle='#bdbdbd';ctx.fillText(camOn?'Beyaz nota çizgiye gelince o şeritte çimdikle':'Beyaz nota çizgiye gelince o şeride dokun',W/2,topY()+30)}}
-function drawThHint(){const rows=camOn?[['Elini kaldır','İmleç notayı gösterir'],['Başparmakla işaret parmağını birleştir','Çalar'],['Birleşikken yukarı, aşağı','Kayarak geçer'],['Parmaklarını ayır','Susar'],['Sağa, sola','Ses rengi değişir']]
-    :[['Ekrana dokun','Çalar'],['Parmağını kaydır','Kayarak geçer'],['Parmağını kaldır','Susar']];
-  const narrow=W<560,bw=Math.min(W-24,440),rh=narrow?44:34,bh=rows.length*rh+28,x0=W/2-bw/2,y0=H/2-bh/2;
+  if(SONG.i===0&&SONG.pos<SONG.notes[0].b){ctx.textAlign='center';ctx.font=`500 14px ${FONT}`;ctx.fillStyle='#bdbdbd';ctx.fillText(S.songEasy?'Herhangi bir parmağını başparmağına değdir':camOn?'Parlayan parmağını başparmağına değdir':'Parlayan tuşa dokun',W/2,(top+hitY)/2)}}
+function drawThHint(){const rows=camOn?[['İki elini kaldır, avuçların kameraya baksın',''],['Başparmağını bir parmağına değdir','O parmağın notası çalar'],['Sol el: Do Re Mi Fa','serçeden işarete'],['Sağ el: Sol La Si Do','işaretten serçeye'],['Çalarken eli yukarı kaldır','Ses bükülür']]
+    :[['Alttaki tuşlara dokun','Basılı tuttukça çalar'],['Klavyede','A S D F J K L Ş']];
+  const narrow=W<560,bw=Math.min(W-24,460),rh=narrow?44:34,bh=rows.length*rh+28,x0=W/2-bw/2,y0=(topY()+keyRect(0).y)/2-bh/2;
   ctx.fillStyle='rgba(10,10,11,.86)';rr(x0,y0,bw,bh,16);ctx.fill();ctx.strokeStyle='rgba(255,255,255,.08)';ctx.lineWidth=1;ctx.stroke();
-  rows.forEach(([a,b2],i)=>{const y=y0+14+rh*i+rh/2;ctx.textAlign='left';
-    if(narrow){ctx.fillStyle='#e6e6e6';ctx.font=`500 14px ${FONT}`;ctx.fillText(a,x0+18,y-8);ctx.fillStyle='#8a8a8a';ctx.font=`400 13px ${FONT}`;ctx.fillText(b2,x0+18,y+10)}
+  rows.forEach(([a,b2],i)=>{const y=y0+14+rh*i+rh/2;ctx.textAlign='left';ctx.textBaseline='middle';
+    if(narrow){ctx.fillStyle='#e6e6e6';ctx.font=`500 14px ${FONT}`;ctx.fillText(a,x0+18,b2?y-8:y);ctx.fillStyle='#8a8a8a';ctx.font=`400 13px ${FONT}`;ctx.fillText(b2,x0+18,y+10)}
     else{ctx.fillStyle='#e6e6e6';ctx.font=`500 14px ${FONT}`;ctx.fillText(a,x0+20,y);ctx.fillStyle='#8a8a8a';ctx.font=`400 13px ${FONT}`;ctx.textAlign='right';ctx.fillText(b2,x0+bw-20,y)}})}
 
 /* ---------- öğretici (teller) ---------- */
@@ -383,8 +367,8 @@ function processHands(lms){
   raw.forEach((r,ri)=>{let s=null;if(pair){if(dist(free[ri].pts[9],r.pts[9])<W*.3)s=free[ri]}else{let bd=W*.3;for(const f of free){const d=dist(f.pts[9],r.pts[9]);if(d<bd){bd=d;s=f}}}
     if(s){if(!pair)free.splice(free.indexOf(s),1);r.pts=r.pts.map((p,i)=>({x:s.pts[i].x+(p.x-s.pts[i].x)*.78,y:s.pts[i].y+(p.y-s.pts[i].y)*.78}));r.role=s.role;r.id=s.id}next.push(r)});
   const used=new Set(next.filter(r=>r.role).map(r=>r.role)),fresh=next.filter(r=>!r.role).sort((a,b)=>a.cx-b.cx);
-  for(const r of fresh){if(!used.size&&fresh.length===1)r.role=S.mode==='theremin'?'R':(r.cx<W/2?'L':'R');else r.role=used.has('L')?'R':'L';used.add(r.role)}
-  if(next.length===1&&S.mode==='strings'){const r=next[0];if(!strPinch.has(r.role)){if(r.role==='R'&&r.cx<W*.4)r.role='L';else if(r.role==='L'&&r.cx>W*.6)r.role='R'}}
+  for(const r of fresh){if(!used.size&&fresh.length===1)r.role=r.cx<W/2?'L':'R';else r.role=used.has('L')?'R':'L';used.add(r.role)}
+  if(next.length===1){const r=next[0],fs=r.id&&fingSt[String(r.id)];if(!strPinch.has(r.role)&&!(fs&&fs.f.some(Boolean))){if(r.role==='R'&&r.cx<W*.4)r.role='L';else if(r.role==='L'&&r.cx>W*.6)r.role='R'}}
   for(const r of next)if(!r.id)r.id=++handIdN;slots=next.map(r=>({pts:r.pts,role:r.role,id:r.id}));
   for(const h of next){h.size=dist(h.pts[0],h.pts[9])||1;h.pr=TIPS.map(t=>dist(h.pts[4],h.pts[t])/h.size);h.ext=TIPS.map(t=>dist(h.pts[0],h.pts[t])/h.size);h.open=TIPS.reduce((a,t)=>a+dist(h.pts[0],h.pts[t]),0)/4/h.size}
   hands=next;
@@ -394,14 +378,17 @@ function processHands(lms){
 /* ---------- dokunma / fare ---------- */
 const ptr=new Map();
 cv.addEventListener('pointerdown',e=>{initAudio();cv.setPointerCapture(e.pointerId);const p={x:e.clientX,y:e.clientY};ptr.set(e.pointerId,p);
+  if(S.mode==='theremin'){p.key=keyAt(p.x,p.y);if(p.key>=0)noteOn('p'+e.pointerId,p.key,null);return}
   if(S.mode!=='strings')return;const id='p'+e.pointerId;p.sx=p.x;p.sy=p.y;p.px=p.x;p.py=p.y;p.t0=performance.now();let ns;
   if(grabAt(p,28)){p.kind='grab';holdStart(id,p,28)}else if(ns=nearString(p,22)){p.kind='fret';p.fs=ns.s;ns.s.fret={k:id,u:ns.u}}else p.kind='pend'});
-cv.addEventListener('pointermove',e=>{const p=ptr.get(e.pointerId);if(!p)return;p.x=e.clientX;p.y=e.clientY;if(S.mode!=='strings')return;
+cv.addEventListener('pointermove',e=>{const p=ptr.get(e.pointerId);if(!p)return;p.x=e.clientX;p.y=e.clientY;
+  if(S.mode==='theremin'){const k=keyAt(p.x,p.y);if(k!==p.key){p.key=k;if(k>=0)noteOn('p'+e.pointerId,k,null);else noteOff('p'+e.pointerId)}return}
+  if(S.mode!=='strings')return;
   const id='p'+e.pointerId;if(p.kind==='pend'&&Math.hypot(p.x-p.sx,p.y-p.sy)>12){p.kind='strum';p.px=p.sx;p.py=p.sy}
   if(p.kind==='fret'){const q=proj(p.fs,p);if(Math.abs(q.d)>30||q.u<0||q.u>1||!strings.includes(p.fs)){if(p.fs.fret&&p.fs.fret.k===id)p.fs.fret=null;p.kind='strum'}else p.fs.fret={k:id,u:Math.max(.04,Math.min(.96,q.u))}}
   if(p.kind==='strum'){const d=Math.hypot(p.x-p.px,p.y-p.py);strum({x:p.px,y:p.py},p,.35+d/45,id)}else if(p.kind==='make'||p.kind==='grab')holdMove(id,p);p.px=p.x;p.py=p.y});
 function pointerFrame(){if(S.mode!=='strings')return;const now=performance.now();for(const[id,p]of ptr)if(p.kind==='pend'&&now-p.t0>260){p.kind='make';holdStart('p'+id,{x:p.sx,y:p.sy},0);holdMove('p'+id,p);buzz(15)}}
-function pUp(e){const p=ptr.get(e.pointerId);if(!p)return;ptr.delete(e.pointerId);const id='p'+e.pointerId;if(p.kind==='make'||p.kind==='grab')holdEnd(id);if(p.kind==='fret'&&p.fs.fret&&p.fs.fret.k===id)p.fs.fret=null}
+function pUp(e){const p=ptr.get(e.pointerId);if(!p)return;ptr.delete(e.pointerId);const id='p'+e.pointerId;noteOff(id);if(p.kind==='make'||p.kind==='grab')holdEnd(id);if(p.kind==='fret'&&p.fs.fret&&p.fs.fret.k===id)p.fs.fret=null}
 cv.addEventListener('pointerup',pUp);cv.addEventListener('pointercancel',pUp);
 function releaseAll(){thereminOff();[...strPinch.keys()].forEach(holdEnd);slots=[];hands=[]}
 
@@ -425,7 +412,7 @@ function drawHands(){
     const tipList=thm?[]:[8,12];ctx.globalCompositeOperation='lighter';
     for(const t of tipList){if(strPinch.has(h.role)&&t===12)continue;const p=P[t],r=Math.max(9,h.size*.13),gr=ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,r*2.2);gr.addColorStop(0,t===8?'rgba(255,90,54,.85)':'rgba(255,255,255,.45)');gr.addColorStop(1,'rgba(0,0,0,0)');ctx.fillStyle=gr;ctx.beginPath();ctx.arc(p.x,p.y,r*2.2,0,7);ctx.fill();ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(p.x,p.y,r*.38,0,7);ctx.fill()}
     ctx.globalCompositeOperation='source-over';
-    if(thm&&h.pr[0]<.9){const v=thVoices.get('h'+h.id),on=v&&v.pinch;ctx.strokeStyle=on?'#fff':'#ffffff44';ctx.lineWidth=on?3:1.2;ctx.beginPath();ctx.moveTo(P[4].x,P[4].y);ctx.lineTo(P[8].x,P[8].y);ctx.stroke()}
+    if(thm){const st=fingSt[String(h.id)];if(st)st.f.forEach((on,f)=>{if(!on)return;ctx.strokeStyle='#fff';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(P[4].x,P[4].y);ctx.lineTo(P[FING[f]].x,P[FING[f]].y);ctx.stroke()})}
     if(S.mode==='strings'&&h.pr[0]<.9){const on=strPinch.has(h.role);ctx.strokeStyle=on?'#fff':'#ffffff44';ctx.lineWidth=on?4:1.5;ctx.beginPath();ctx.moveTo(P[4].x,P[4].y);ctx.lineTo(P[8].x,P[8].y);ctx.stroke()}
     ctx.restore()}
 }
@@ -477,16 +464,16 @@ const HELP={
     <dt>Ses</dt><dd>Uzun tel kalın, kısa tel ince ses verir.</dd>
     <dt>Silmek</dt><dd>Telin bir ucunu tutup diğer ucuna götür.</dd></dl>
     <p>Dokunmatik: basılı tutup çek, tel oluşur. Kaydırınca çalar.</p>`],
-  theremin:['Theremin',`<p>Bir kalemi tutar gibi çalınır. Her elin ayrı bir ses.</p><dl>
-    <dt>Açık el</dt><dd>İmleç hangi notanın üstünde olduğunu gösterir. Ses çıkmaz.</dd>
-    <dt>Çimdik</dt><dd>Başparmağınla işaret parmağını birleştirince o nota çalar.</dd>
-    <dt>Kaydır</dt><dd>Birleşikken yukarı aşağı gidersen notalar arasında kayarak geçer.</dd>
-    <dt>Bırak</dt><dd>Parmaklarını ayırınca susar. Kısa çimdiklerle kesik notalar çalarsın.</dd>
-    <dt>Renk</dt><dd>Sağa sola gittikçe sesin rengi değişir. Elini hafifçe titretirsen ses titrer.</dd></dl>
-    <p><b>Şarkı</b> ile bir ezgi seç: notalar çizgiye akar, sen çalarsın. Şarkı seni bekler.</p>`],
+  theremin:['Theremin',`<p>İki elini piyanonun üstündeymiş gibi tut. Avuçların kameraya baksın.</p><dl>
+    <dt>Çal</dt><dd>Başparmağını bir parmağına değdir; o parmağın notası çalar. Değdikçe sürer, ayırınca biter.</dd>
+    <dt>Sol el</dt><dd>Serçeden işarete: Do, Re, Mi, Fa.</dd>
+    <dt>Sağ el</dt><dd>İşaretten serçeye: Sol, La, Si, Do. Her parmağın notası ucunda yazar.</dd>
+    <dt>Bük</dt><dd>Çalarken elini yukarı kaldır ya da indir; ses bükülür. Elini titretirsen ses titrer.</dd>
+    <dt>Tuşlar</dt><dd>Alttaki tuşlara dokunarak ya da klavyede A S D F J K L Ş ile de çalabilirsin.</dd></dl>
+    <p><b>Şarkı</b> ile bir ezgi seç: notalar tuşlara iner, sıradaki parmağın elinde parlar. Şarkı seni bekler.</p>`],
 };
 function showHelp(){const[t,b]=HELP[S.mode];$('#helpTitle').textContent=t;$('#helpBody').innerHTML=b;$('#help').hidden=false}
-function setMode(m){songStop();releaseAll();if(m!=='theremin'&&S.drone){S.drone=false;droneSet(false);$('#droneBtn').classList.remove('on')}S.mode=m;save();
+function setMode(m){songStop();releaseAll();document.body.dataset.mode=m;if(m!=='theremin'&&S.drone){S.drone=false;droneSet(false);$('#droneBtn').classList.remove('on')}S.mode=m;save();
   document.querySelectorAll('#modes button').forEach(b=>b.classList.toggle('on',b.dataset.mode===m));
   document.querySelectorAll('[data-for]').forEach(el=>el.hidden=el.dataset.for!==m);renderTut()}
 document.querySelectorAll('#modes button').forEach(b=>b.onclick=()=>{initAudio();const m=b.dataset.mode;if(m===S.mode)return;setMode(m);
@@ -511,14 +498,16 @@ $('#toneSel').value=S.strTone;$('#toneSel').onchange=e=>{S.strTone=e.target.valu
 const rev=$('#rev');rev.value=S.reverb;rev.oninput=()=>{S.reverb=+rev.value;if(revSend)revSend.gain.value=S.reverb;save()};
 const vol=$('#vol');vol.value=S.vol;vol.oninput=()=>{S.vol=+vol.value;if(master)master.gain.value=S.vol;save()};
 const tog=(el,k,fn)=>{el.classList.toggle('on',!!S[k]);el.onclick=()=>{S[k]=!S[k];el.classList.toggle('on',S[k]);save();fn&&fn()}};
-tog($('#strQuantTog'),'strQuant',retune);tog($('#songRecTog'),'songRec');tog($('#songMicTog'),'songMic');tog($('#quantTog'),'quant');tog($('#micTog'),'mic');tog($('#videoTog'),'video');
+tog($('#strQuantTog'),'strQuant',retune);tog($('#songRecTog'),'songRec');tog($('#songEasyTog'),'songEasy');tog($('#songMicTog'),'songMic');tog($('#quantTog'),'quant');tog($('#micTog'),'mic');tog($('#videoTog'),'video');
 $('#tutSkip').onclick=()=>{tut=TUT.length;try{localStorage.setItem('havaTut',tut)}catch(e){}renderTut()};
 loadStrings();
 let lastW=W,lastH=H;addEventListener('resize',()=>{const fx=W/lastW,fy=H/lastH;if(fx!==1||fy!==1){strings.forEach(s=>{s.a={x:s.a.x*fx,y:s.a.y*fy};s.b={x:s.b.x*fx,y:s.b.y*fy}});retune();lastW=W;lastH=H}});
+addEventListener('keydown',e=>{if(e.repeat||S.mode!=='theremin'||e.target.tagName==='SELECT'||e.metaKey||e.ctrlKey)return;const k=KB.indexOf(e.key.toLocaleLowerCase('tr'))>=0?KB.indexOf(e.key.toLocaleLowerCase('tr')):e.key===';'?7:-1;if(k>=0){initAudio();noteOn('k'+k,k,null)}});
+addEventListener('keyup',e=>{const c=e.key.toLocaleLowerCase('tr'),k=KB.indexOf(c)>=0?KB.indexOf(c):e.key===';'?7:-1;if(k>=0)noteOff('k'+k)});
 let wake=null;async function keepAwake(){try{if(navigator.wakeLock&&!document.hidden)wake=await navigator.wakeLock.request('screen')}catch(e){}}
 document.addEventListener('visibilitychange',()=>{if(document.hidden)releaseAll();else if(camOn)keepAwake()});
 setMode(S.mode);
-if(DEBUG)window.__ho={get strings(){return strings},get hands(){return hands},get tut(){return tut},get notes(){return plog.length},get det(){return[detN,detMs.toFixed(1)]},level(){if(!analyser)return -1;analyser.getByteTimeDomainData(waveData);let m=0;for(const v of waveData)m=Math.max(m,Math.abs(v-128));return m},get ac(){return ac&&ac.state},plog,SONG,get thv(){return [...thVoices.values()].map(v=>({zone:v.zone,playing:v.playing,note:nameOf(thZones()[v.zone]??60)}))}};
+if(DEBUG)window.__ho={get strings(){return strings},get hands(){return hands},get tut(){return tut},get notes(){return plog.length},get det(){return[detN,detMs.toFixed(1)]},level(){if(!analyser)return -1;analyser.getByteTimeDomainData(waveData);let m=0;for(const v of waveData)m=Math.max(m,Math.abs(v-128));return m},get ac(){return ac&&ac.state},plog,SONG,get held(){return [...held.values()].map(n=>({k:n.k,m:n.m,bend:+n.bend.toFixed(2)}))}};
 
 /* ---------- kayıt (video + istenirse mikrofon) ---------- */
 let mrec=null,chunks=[],recStart=0,recTimer,micStream=null,micNode=null;
