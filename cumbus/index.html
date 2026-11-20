@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#0c0a14">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="description" content="Parmakların, ellerin, yüzün ve sesinle müzik yap. Tek kişilik orkestra sensin.">
+<title>Cümbüş</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%230c0a14'/%3E%3Ccircle cx='9' cy='11' r='4' fill='%23ffd23f'/%3E%3Ccircle cx='23' cy='11' r='4' fill='%23ff5d8f'/%3E%3Ccircle cx='9' cy='22' r='4' fill='%233ee6d0'/%3E%3Ccircle cx='23' cy='22' r='4' fill='%23a98bff'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<video id="vid" playsinline muted autoplay></video>
+<canvas id="cv" aria-label="Oyun alanı"></canvas>
+
+<!-- oyun göstergesi -->
+<div id="hud" hidden>
+  <div id="prog"><i></i></div>
+  <div class="hud-top">
+    <div id="score">0</div>
+    <div id="mid"><div id="mult">x1</div><div id="pips"><i></i><i></i><i></i><i></i></div></div>
+    <button id="pauseBtn" class="ic" aria-label="Duraklat">❚❚</button>
+  </div>
+  <div id="combo"></div>
+  <div id="hint" role="status"></div>
+</div>
+
+<!-- serbest çal göstergesi -->
+<div id="jam" hidden>
+  <div class="jam-top">
+    <button id="jamBack" class="ic" aria-label="Menü">←</button>
+    <div class="jam-opts">
+      <button id="jTempo" class="chip on">♩ 100</button>
+      <button id="jBeat" class="chip on">Davul</button>
+      <button id="jQuant" class="chip on">Ritme oturt</button>
+      <button id="jMic" class="chip on">🎤 Beatbox</button>
+    </div>
+  </div>
+  <ul id="legend">
+    <li data-g="pinch"><b>👌</b><span>Parmaklar<small>notalar</small></span></li>
+    <li data-g="clap"><b>👏</b><span>Alkış</span></li>
+    <li data-g="fist"><b>✊</b><span>Yumruk<small>davul</small></span></li>
+    <li data-g="mouth"><b>😮</b><span>Ağız<small>koro</small></span></li>
+    <li data-g="brow"><b>🤨</b><span>Kaş kaldır<small>zil</small></span></li>
+    <li data-g="voice"><b>🎤</b><span id="lgVoice">Ses<small>bum · pa · ts</small></span></li>
+  </ul>
+  <div class="looper">
+    <div id="layers"></div>
+    <div class="loop-row">
+      <button id="lUndo" class="ic" aria-label="Son katmanı sil">↶</button>
+      <button id="lRec" aria-label="Döngü kaydet"><svg viewBox="0 0 80 80"><circle class="trk" cx="40" cy="40" r="36"/><circle class="bar" cx="40" cy="40" r="36"/></svg><span></span></button>
+      <button id="lClear" class="ic" aria-label="Döngüleri temizle">✕</button>
+    </div>
+    <small id="lTxt">Kaydet: 2 ölçü çal, döngü olsun</small>
+  </div>
+</div>
+
+<!-- giriş -->
+<section id="intro" class="layer">
+  <div class="hero">
+    <div class="emo"><span>👌</span><span>👏</span><span>😮</span><span>🎤</span></div>
+    <h1>Cümbüş</h1>
+    <p>Tek kişilik orkestra sensin.<br>Parmaklarınla, ellerinle, yüzünle ve sesinle çal.</p>
+    <button id="startBtn" class="primary">Başla</button>
+    <button id="noCamBtn" class="link">Kamerasız dene (klavye / dokunma)</button>
+    <small id="introNote">Kamera ve mikrofon izni istenir. Görüntü ve ses cihazından çıkmaz.</small>
+  </div>
+</section>
+
+<!-- menü -->
+<section id="menu" class="layer scroll" hidden>
+  <div class="menu">
+    <header>
+      <h1>Cümbüş</h1>
+      <div id="totStars">★ 0</div>
+      <button id="setBtn" class="ic" aria-label="Ayarlar">⚙</button>
+    </header>
+    <button id="jamBtn" class="jam-card">
+      <div class="jc-emo">🎛️</div>
+      <div><b>Serbest Çal</b><small>Her hareketin bir enstrüman. Döngü kaydet, kendi şarkını kur.</small></div>
+      <span class="go">▶</span>
+    </button>
+    <h3>Şarkılar</h3>
+    <div id="lvlList"></div>
+    <p class="foot">Notalar halkaya gelince hareketi yap. Seri yaptıkça müziğe yeni sazlar katılır.</p>
+  </div>
+</section>
+
+<!-- yeni enstrüman öğretimi -->
+<section id="teach" hidden>
+  <div class="tcard">
+    <div class="tnew">Yeni enstrüman</div>
+    <div class="temo" id="tEmo">👌</div>
+    <h2 id="tName">Parmak</h2>
+    <p id="tText"></p>
+    <div class="tdots" id="tDots"><i></i><i></i><i></i></div>
+    <div class="tsense" id="tSense"></div>
+    <div class="trow"><small id="tKey"></small><button id="tSkip" class="link">Atla</button></div>
+  </div>
+</section>
+
+<!-- sonuç -->
+<section id="result" class="layer" hidden>
+  <div class="card center">
+    <div class="rstars" id="rStars"><i>★</i><i>★</i><i>★</i></div>
+    <h2 id="rTitle">Harika!</h2>
+    <div class="rscore" id="rScore">0</div>
+    <div class="rbest" id="rBest"></div>
+    <div class="rstats" id="rStats"></div>
+    <p class="rnext" id="rNext"></p>
+    <div class="rbtns">
+      <button id="rMenu" class="ghost">Menü</button>
+      <button id="rAgain" class="ghost">Tekrar</button>
+      <button id="rGo" class="primary">Sonraki ▶</button>
+    </div>
+  </div>
+</section>
+
+<!-- duraklatma -->
+<section id="pause" class="layer" hidden>
+  <div class="card center">
+    <h2>Duraklatıldı</h2>
+    <div class="pbtns">
+      <button id="pResume" class="primary">Devam</button>
+      <button id="pRestart" class="ghost">Baştan</button>
+      <button id="pMenu" class="ghost">Menü</button>
+    </div>
+  </div>
+</section>
+
+<!-- ayarlar -->
+<section id="settings" class="layer" hidden>
+  <div class="card">
+    <h2>Ayarlar</h2>
+    <label class="row"><span>Ses seviyesi</span><input id="sVol" type="range" min="0" max="1" step="0.05"></label>
+    <label class="row"><span>Kamerayı göster</span><input id="sCam" type="checkbox"></label>
+    <label class="row"><span>Zamanlama (kamera)</span><input id="sLat" type="range" min="-150" max="250" step="10"><output id="sLatV"></output></label>
+    <p class="note">Zamanlama her şarkıdan sonra kendiliğinden ayarlanır. Ses gecikmesi için kulaklık önerilir; mikrofon oyunun kendi sesini daha az duyar.</p>
+    <div class="rbtns">
+      <button id="sReset" class="ghost">İlerlemeyi sıfırla</button>
+      <button id="sClose" class="primary">Tamam</button>
+    </div>
+  </div>
+</section>
+
+<div id="toast" role="status"></div>
+<script src="app.js"></script>
+</body>
+</html>
