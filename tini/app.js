@@ -203,66 +203,85 @@ function drawStrings(){
 function hint(lines){ctx.save();ctx.textAlign='center';ctx.textBaseline='middle';lines.forEach((l,i)=>{ctx.fillStyle=i?'#8f8f8f':'#dcdcdc';ctx.font=`${i?400:500} ${i?14:16}px ${FONT}`;ctx.fillText(l,W/2,H/2-(lines.length-1)*12+i*26)});ctx.restore()}
 
 /* ---------- theremin ----------
-   Tek el yeter: açık el = ses, yükseklik = nota, sağa-sola = ses rengi, yumruk = sus.
-   Elin doğal titremesi vibratoya dönüşür. İkinci el (varsa) yüksekliğiyle ses düzeyini ayarlar. */
-let th=null,thInfo=null,thSmooth=null,thTarget=null,thLvl=0,thColor=.5,thSeen=0;const thTrail=[];const thFist={};
-const TH_RANGE=24,thLo=()=>48+S.key;
+   Her el bir ses.
+   Yükseklik = nota · parmak sayısı = katman (1 tek ses, 2 ikili, 3 üçlü, açık el akor) · yumruk = sus
+   başparmak + işaret dokunuşu = tın · sağa-sola = ses rengi · kameraya yaklaşmak = ses gücü · titreme = vibrato */
+const TH_RANGE=24,thLo=()=>48+S.key,LAYER_W=[1,.72,.62,.5],LAYER_AD=['sus','tek ses','ikili','üçlü','akor'],PIP=[6,10,14,18];
+const thVoices=new Map();
+const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
 function thArea(){return{t:topY()+70,b:botY()-30}}
-function thPitchAt(y){const{t,b}=thArea();return thLo()+(1-Math.max(0,Math.min(1,(y-t)/(b-t))))*TH_RANGE}
+function thPitchAt(y){const{t,b}=thArea();return thLo()+(1-clamp((y-t)/(b-t),0,1))*TH_RANGE}
 function thYOf(m){const{t,b}=thArea();return b-(m-thLo())/TH_RANGE*(b-t)}
-function thereminUpdate(src,lvl,color){
-  if(!src){if(th)th.level(0);thLvl=0;if(thInfo)thInfo.lvl=0;return}
-  const raw=thPitchAt(src.y);
-  thSmooth=thSmooth==null?raw:thSmooth+(raw-thSmooth)*.2;
-  const wig=Math.max(-.8,Math.min(.8,(raw-thSmooth)*1.1));   // titreme = vibrato
-  let center=thSmooth,target=Math.round(center);
-  if(S.quant){const all=scaleNotes(40,24+S.key),near=all.reduce((a,n)=>Math.abs(n-center)<Math.abs(a-center)?n:a,all[0]);if(thTarget==null||Math.abs(center-near)+.35<Math.abs(center-thTarget))thTarget=near;target=thTarget;center=target}
-  const m=center+wig;
-  if(!th&&ac)th=thSynth(S.thTone);
-  if(th){th.pitch(m);th.color(color);th.level(lvl);th.vibrato(S.thTone==='vokal'?8:0)}
-  thLvl=lvl;thColor=color;thInfo={m,target,x:src.x,y:src.y,lvl,wig:Math.abs(wig)};thSeen=performance.now();
-  thTrail.push({x:src.x,y:src.y,l:lvl,t:performance.now()});if(thTrail.length>90)thTrail.shift();
-  if(lvl>.05&&thInfo.target!==thereminUpdate.last){thereminUpdate.last=thInfo.target;energy=Math.min(1,energy+.05)}
-}
-function thereminOff(){if(th){th.stop();th=null}thInfo=null;thSmooth=null;thTarget=null;thTrail.length=0}
+function harmony(root,n){const sc=scaleNotes(70,12+S.key),i=sc.indexOf(root);
+  const hs=S.quant&&i>=0?[root,sc[i+2],sc[i+4],root+12]:[root,root+4,root+7,root+12];return hs.slice(0,Math.max(1,n))}
+function ping(m){if(!ac)return;const t=ac.currentTime,g=ac.createGain();g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(.2,t+.005);g.gain.exponentialRampToValueAtTime(.001,t+1.4);g.connect(bus);
+  [[1,1],[2.76,.3],[5.4,.1]].forEach(([r,a])=>{const o=ac.createOscillator(),og=ac.createGain();o.frequency.value=mtof(m)*r;og.gain.value=a;o.connect(og);og.connect(g);o.start(t);o.stop(t+1.5)});setTimeout(()=>{try{g.disconnect()}catch(e){}},1800)}
+function thVoice(id){let v=thVoices.get(id);if(v)return v;
+  v={id,order:thVoices.size,layers:ac?[0,1,2,3].map(()=>thSynth(S.thTone)):[],smooth:null,target:null,count:1,cand:1,candN:0,ext:[0,0,0,0],pinch:false,volS:null,vol:0,trail:[],rip:[],seen:0,hs:null,m:0,wig:0,x:.5,palm:null};
+  thVoices.set(id,v);return v}
+function thStopAll(){for(const v of thVoices.values())v.layers.forEach(l=>l.stop());thVoices.clear()}
+function thDrive(v,y,x,n,vol,now){
+  const raw=thPitchAt(y);v.smooth=v.smooth==null?raw:v.smooth+(raw-v.smooth)*.22;
+  const wig=clamp((raw-v.smooth)*1.6,-.8,.8);
+  let root,off=0;
+  if(S.quant){const all=scaleNotes(40,24+S.key),near=all.reduce((a,k)=>Math.abs(k-v.smooth)<Math.abs(a-v.smooth)?k:a,all[0]);if(v.target==null||Math.abs(v.smooth-near)+.35<Math.abs(v.smooth-v.target))v.target=near;root=v.target}
+  else{root=Math.round(v.smooth);off=v.smooth-root;v.target=root}
+  const hs=harmony(root,n),norm=1/(1+(Math.max(1,n)-1)*.35);
+  v.layers.forEach((L,k)=>{L.pitch((hs[k]??hs[0])+off+wig);L.color(x);L.vibrato(S.thTone==='vokal'?8:0);L.level(k<n?vol*LAYER_W[k]*norm:0)});
+  if(n&&v.hs&&v.hs[0]!==hs[0])energy=Math.min(1,energy+.04);
+  v.hs=hs;v.m=root+off+wig;v.off=off+wig;v.wig=Math.abs(wig);v.vol=n?vol:0;v.count=n;v.x=x;v.seen=now;
+  v.trail.push({x:v.palm.x,ys:hs.map(h=>thYOf(v.smooth+wig*.5+(h-root))),n,l:v.vol,t:now});if(v.trail.length>70)v.trail.shift()}
+function fingerCount(h,v){let c=0;TIPS.forEach((t,i)=>{const r=dist(h.pts[0],h.pts[t])/(dist(h.pts[0],h.pts[PIP[i]])||1);v.ext[i]=v.ext[i]?r>1.0:r>1.12;if(v.ext[i])c++});return c}
 function thereminFrame(){
-  if(S.mode!=='theremin')return;
-  let P=hands.find(h=>h.role==='R'),V=hands.find(h=>h.role==='L');if(!P&&V){P=V;V=null}
-  let src=null,lvl=.85,color=.5;
-  if(P){const k='p'+P.id;thFist[k]=thFist[k]?P.open<1.3:P.open<1.08;if(!thFist[k]){const p=P.pts[8];src={x:p.x,y:p.y};color=Math.max(0,Math.min(1,p.x/W))}}
-  if(V){const k='v'+V.id;thFist[k]=thFist[k]?V.open<1.3:V.open<1.08;const{t,b}=thArea();lvl=thFist[k]?0:Math.max(.08,Math.min(1,1-(V.pts[9].y-t)/(b-t)))}
-  if(!src&&ptr.size){const p=[...ptr.values()][0];src={x:p.x,y:p.y};lvl=.85;color=Math.max(0,Math.min(1,p.x/W))}
-  thereminUpdate(src,lvl,color);
+  if(S.mode!=='theremin')return;const now=performance.now(),live=new Set();
+  for(const h of hands){const id='h'+h.id;live.add(id);const v=thVoice(id);if(!v.layers.length&&ac)v.layers=[0,1,2,3].map(()=>thSynth(S.thTone));
+    v.palm=[0,5,9,13,17].reduce((a,i)=>({x:a.x+h.pts[i].x/5,y:a.y+h.pts[i].y/5}),{x:0,y:0});v.size=h.size;
+    let c=fingerCount(h,v),n=Math.min(4,c);if(c===0&&h.open>1.45)n=1;
+    if(n!==v.cand){v.cand=n;v.candN=1}else v.candN++;if(v.candN>=3||v.seen===0)v.count=v.cand;
+    const pr=dist(h.pts[4],h.pts[8])/h.size;const was=v.pinch;v.pinch=was?pr<.42:pr<.26;
+    if(v.pinch&&!was&&v.target!=null){ping(v.target+12);v.rip.push({t:now,x:(h.pts[4].x+h.pts[8].x)/2,y:(h.pts[4].y+h.pts[8].y)/2});burst((h.pts[4].x+h.pts[8].x)/2,(h.pts[4].y+h.pts[8].y)/2,10)}
+    const dn=clamp((h.size/Math.min(W,H)-.06)/.11,0,1);v.volS=v.volS==null?dn:v.volS+(dn-v.volS)*.15;
+    thDrive(v,v.palm.y,clamp(v.palm.x/W,0,1),v.count,.35+.65*v.volS,now)}
+  for(const[pid,p]of ptr){const id='p'+pid;live.add(id);const v=thVoice(id);if(!v.layers.length&&ac)v.layers=[0,1,2,3].map(()=>thSynth(S.thTone));v.palm={x:p.x,y:p.y};v.size=40;thDrive(v,p.y,clamp(p.x/W,0,1),1,.8,now)}
+  for(const v of[...thVoices.values()])if(!live.has(v.id)){v.layers.forEach(l=>l.level(0));v.vol=0;if(now-v.seen>700){v.layers.forEach(l=>l.stop());thVoices.delete(v.id)}}
 }
+function thereminOff(){thStopAll()}
+const TH_COL=[[255,90,54],[255,214,196]];
 function drawTheremin(){
-  const{t,b}=thArea(),lo=thLo(),cur=thInfo&&thInfo.lvl>.02?thInfo:null;
+  const{t,b}=thArea(),lo=thLo(),now=performance.now(),vs=[...thVoices.values()].sort((a,c)=>a.order-c.order),act=vs.filter(v=>v.count&&now-v.seen<200);
+  const hot=new Set();act.forEach(v=>v.hs.forEach(h=>hot.add(Math.round(h))));
   const notes=scaleNotes(40,24+S.key).filter(n=>n>=lo-.01&&n<=lo+TH_RANGE+.01);
   ctx.save();ctx.textBaseline='middle';
-  // nota bantları
-  for(let i=0;i<notes.length;i++){const n=notes[i],y=thYOf(n),hot=cur&&cur.target===n,root=((n-S.key)%12+12)%12===0;
-    const y0=i<notes.length-1?(y+thYOf(notes[i+1]))/2:t,y1=i>0?(y+thYOf(notes[i-1]))/2:b;
-    if(hot){ctx.fillStyle=`rgba(255,90,54,${.08+cur.lvl*.1})`;ctx.fillRect(0,y0,W,y1-y0)}
-    ctx.strokeStyle=hot?'rgba(255,90,54,.6)':root?'rgba(255,255,255,.18)':'rgba(255,255,255,.07)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(56,y);ctx.lineTo(W-26,y);ctx.stroke();
-    ctx.font=`${hot?600:500} ${hot?14:12}px ${MONO}`;ctx.fillStyle=hot?ACC:root?'#c9c9c9':'#6f6f6f';ctx.textAlign='right';ctx.fillText(nameOf(n),46,y)}
-  // ses düzeyi
-  const vh=b-t;ctx.fillStyle='rgba(255,255,255,.06)';rr(W-16,t,3,vh,2);ctx.fill();ctx.fillStyle='#ededed';rr(W-16,t+vh*(1-thLvl),3,vh*thLvl,2);ctx.fill();
-  // iz
-  const now=performance.now();ctx.lineCap='round';
-  for(let i=1;i<thTrail.length;i++){const a=thTrail[i-1],c=thTrail[i],age=(now-c.t)/1400;if(age>1)continue;const al=(1-age)*Math.min(1,c.l*1.4);if(al<.02)continue;
-    ctx.strokeStyle=`rgba(255,90,54,${al*.5})`;ctx.lineWidth=2+c.l*14*(1-age);ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(c.x,c.y);ctx.stroke();
-    ctx.strokeStyle=`rgba(255,255,255,${al*.7})`;ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(c.x,c.y);ctx.stroke()}
-  if(cur){const r=10+cur.lvl*18+cur.wig*8,g=ctx.createRadialGradient(cur.x,cur.y,0,cur.x,cur.y,r*2.4);g.addColorStop(0,`rgba(255,90,54,${.35+cur.lvl*.4})`);g.addColorStop(1,'rgba(255,90,54,0)');ctx.fillStyle=g;ctx.beginPath();ctx.arc(cur.x,cur.y,r*2.4,0,7);ctx.fill();ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(cur.x,cur.y,4,0,7);ctx.fill();
-    const cx=W/2,cy=topY()+30,dev=Math.max(-1,Math.min(1,(cur.m-cur.target)*2));ctx.textAlign='center';ctx.fillStyle='#ededed';ctx.font=`600 32px ${MONO}`;ctx.fillText(nameOf(cur.target),cx,cy);
+  for(const n of notes){const y=thYOf(n),h=hot.has(n),root=((n-S.key)%12+12)%12===0;
+    ctx.strokeStyle=h?'rgba(255,90,54,.5)':root?'rgba(255,255,255,.16)':'rgba(255,255,255,.06)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(56,y);ctx.lineTo(W-12,y);ctx.stroke();
+    ctx.font=`${h?600:500} ${h?14:12}px ${MONO}`;ctx.fillStyle=h?ACC:root?'#c9c9c9':'#666';ctx.textAlign='right';ctx.fillText(nameOf(n),46,y)}
+  // ışık şeritleri: her katman kendi notasının yüksekliğinde
+  ctx.lineCap='round';ctx.lineJoin='round';
+  vs.forEach((v,vi)=>{const[r,g,bb]=TH_COL[vi%2];
+    for(let k=0;k<4;k++)for(let pass=0;pass<2;pass++){
+      // aynı katmanın ardışık noktalarını yumuşak eğriyle birleştir
+      let seg=[];const flush=()=>{if(seg.length>1){for(let i=1;i<seg.length;i++){const a=seg[i-1],c=seg[i],al=c.al;ctx.strokeStyle=pass?`rgba(255,255,255,${al*.55})`:`rgba(${r},${g},${bb},${al*.42})`;ctx.lineWidth=pass?1.3:c.w;
+        const pa=seg[i-2]||a,mx0=(pa.x+a.x)/2,my0=(pa.y+a.y)/2,mx1=(a.x+c.x)/2,my1=(a.y+c.y)/2;ctx.beginPath();ctx.moveTo(i>1?mx0:a.x,i>1?my0:a.y);ctx.quadraticCurveTo(a.x,a.y,mx1,my1);ctx.stroke()}}seg=[]};
+      for(const c of v.trail){const age=(now-c.t)/1200;if(age>1||c.n<=k||c.l<.02){flush();continue}seg.push({x:c.x,y:c.ys[k],al:(1-age)*Math.min(1,c.l*1.3)*(k?.75:1),w:2+c.l*12*(1-age)*(k?.7:1)})}flush()}
+    v.rip=v.rip.filter(p=>now-p.t<700);for(const p of v.rip){const a=(now-p.t)/700;ctx.strokeStyle=`rgba(255,255,255,${(1-a)*.8})`;ctx.lineWidth=2*(1-a);ctx.beginPath();ctx.arc(p.x,p.y,8+a*60,0,7);ctx.stroke()}
+    if(!v.palm||now-v.seen>200)return;const P=v.palm;
+    if(v.count){const rad=12+v.vol*22+v.wig*8,gr=ctx.createRadialGradient(P.x,P.y,0,P.x,P.y,rad*2.2);gr.addColorStop(0,`rgba(${r},${g},${bb},${.3+v.vol*.45})`);gr.addColorStop(1,`rgba(${r},${g},${bb},0)`);ctx.fillStyle=gr;ctx.beginPath();ctx.arc(P.x,P.y,rad*2.2,0,7);ctx.fill();
+      v.hs.forEach((h,k)=>{const y=thYOf(h+(v.off||0));ctx.fillStyle=k?'rgba(255,255,255,.85)':'#fff';ctx.beginPath();ctx.arc(P.x,y,k?3:4.5,0,7);ctx.fill()})}
+    else{ctx.strokeStyle='rgba(255,255,255,.35)';ctx.lineWidth=1.5;ctx.setLineDash([3,4]);ctx.beginPath();ctx.arc(P.x,P.y,18,0,7);ctx.stroke();ctx.setLineDash([])}
+    ctx.textAlign='left';ctx.font=`500 12px ${FONT}`;ctx.fillStyle=v.count?'#ededed':'#8f8f8f';ctx.fillText(v.count?`${nameOf(v.target)} · ${LAYER_AD[v.count]}`:'sus',P.x+(v.size||40)*.9,P.y)});
+  // üstte: çalan nota(lar) ve akort
+  if(act.length===1){const v=act[0],cx=W/2,cy=topY()+30,dev=clamp((v.m-v.target)*2,-1,1);ctx.textAlign='center';ctx.fillStyle='#ededed';ctx.font=`600 32px ${MONO}`;ctx.fillText(nameOf(v.target),cx,cy);
     ctx.fillStyle='rgba(255,255,255,.12)';ctx.fillRect(cx-60,cy+24,120,2);ctx.fillStyle='rgba(255,255,255,.4)';ctx.fillRect(cx-1,cy+20,2,10);ctx.fillStyle=Math.abs(dev)<.2?'#3ecf8e':ACC;ctx.beginPath();ctx.arc(cx+dev*60,cy+25,4,0,7);ctx.fill()}
-  else if(thInfo&&now-thSeen<400){ctx.textAlign='center';ctx.fillStyle='#8f8f8f';ctx.font=`500 14px ${FONT}`;ctx.fillText('Sessiz',W/2,topY()+30)}
-  else if(!ptr.size&&!hands.some(h=>!thFist['p'+h.id]))drawThHint();
+  else if(act.length>1){ctx.textAlign='center';ctx.font=`600 28px ${MONO}`;ctx.fillStyle='#ededed';ctx.fillText(act.map(v=>nameOf(v.target)).join('  ·  '),W/2,topY()+30)}
+  else if(!vs.some(v=>now-v.seen<300))drawThHint();
   ctx.restore();
 }
-// el yokken: üç adımlık sade anlatım
-function drawThHint(){const cx=W/2,cy=H/2,gap=Math.min(150,W*.3),items=[['Elini aç','ses gelir'],['Yukarı, aşağı','nota değişir'],['Yumruk yap','susar']];
-  const bw=Math.min(W-24,gap*3+20),bh=118;ctx.fillStyle='rgba(10,10,11,.82)';rr(cx-bw/2,cy-34,bw,bh,16);ctx.fill();ctx.strokeStyle='rgba(255,255,255,.08)';ctx.stroke();
-  ctx.textAlign='center';items.forEach(([a,b2],i)=>{const x=cx+(i-1)*gap;ctx.fillStyle='#dcdcdc';ctx.font=`500 15px ${FONT}`;ctx.fillText(a,x,cy);ctx.fillStyle='#7a7a7a';ctx.font=`400 13px ${FONT}`;ctx.fillText(b2,x,cy+22)});
-  ctx.fillStyle='#5f5f5f';ctx.font=`400 12px ${FONT}`;ctx.fillText('İkinci elin yüksekliği ses düzeyini ayarlar',cx,cy+64)}
+function drawThHint(){const rows=[['Elini kaldır','Yükseklik notayı seçer'],['1 parmak · 2 parmak · açık el','Tek ses · ikili · akor'],['Yumruk','Susar'],['Başparmakla işaret parmağını değdir','Tın sesi'],['Kameraya yaklaş','Ses güçlenir'],['İki el','İki ayrı ses']];
+  const narrow=W<560,bw=Math.min(W-24,440),rh=narrow?44:34,bh=rows.length*rh+28,x0=W/2-bw/2,y0=H/2-bh/2;
+  ctx.fillStyle='rgba(10,10,11,.86)';rr(x0,y0,bw,bh,16);ctx.fill();ctx.strokeStyle='rgba(255,255,255,.08)';ctx.lineWidth=1;ctx.stroke();
+  rows.forEach(([a,b2],i)=>{const y=y0+14+rh*i+rh/2;ctx.textAlign='left';
+    if(narrow){ctx.fillStyle='#e6e6e6';ctx.font=`500 14px ${FONT}`;ctx.fillText(a,x0+18,y-8);ctx.fillStyle='#8a8a8a';ctx.font=`400 13px ${FONT}`;ctx.fillText(b2,x0+18,y+10)}
+    else{ctx.fillStyle='#e6e6e6';ctx.font=`500 14px ${FONT}`;ctx.fillText(a,x0+20,y);ctx.fillStyle='#8a8a8a';ctx.font=`400 13px ${FONT}`;ctx.textAlign='right';ctx.fillText(b2,x0+bw-20,y)}})}
 
 /* ---------- öğretici (teller) ---------- */
 const TUT=[
@@ -332,9 +351,9 @@ function draw(){
 }
 function drawHands(){
   for(const h of hands){const P=h.pts;ctx.save();ctx.lineCap='round';const lw=Math.max(1.5,h.size*.027);ctx.beginPath();for(const[a,b]of CON){ctx.moveTo(P[a].x,P[a].y);ctx.lineTo(P[b].x,P[b].y)}
-    const muted=S.mode==='theremin'&&(thFist['p'+h.id]||thFist['v'+h.id]);ctx.strokeStyle=muted?'rgba(255,255,255,.12)':'rgba(255,255,255,.28)';ctx.lineWidth=lw;ctx.stroke();
-    const tipList=S.mode==='theremin'?[8]:[8,12];ctx.globalCompositeOperation='lighter';
-    for(const t of tipList){if(strPinch.has(h.role)&&t===12)continue;if(muted)continue;const p=P[t],r=Math.max(9,h.size*.13),gr=ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,r*2.2);gr.addColorStop(0,t===8?'rgba(255,90,54,.85)':'rgba(255,255,255,.45)');gr.addColorStop(1,'rgba(0,0,0,0)');ctx.fillStyle=gr;ctx.beginPath();ctx.arc(p.x,p.y,r*2.2,0,7);ctx.fill();ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(p.x,p.y,r*.38,0,7);ctx.fill()}
+    const thm=S.mode==='theremin';ctx.strokeStyle=thm?'rgba(255,255,255,.16)':'rgba(255,255,255,.28)';ctx.lineWidth=lw;ctx.stroke();
+    const tipList=thm?[]:[8,12];ctx.globalCompositeOperation='lighter';
+    for(const t of tipList){if(strPinch.has(h.role)&&t===12)continue;const p=P[t],r=Math.max(9,h.size*.13),gr=ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,r*2.2);gr.addColorStop(0,t===8?'rgba(255,90,54,.85)':'rgba(255,255,255,.45)');gr.addColorStop(1,'rgba(0,0,0,0)');ctx.fillStyle=gr;ctx.beginPath();ctx.arc(p.x,p.y,r*2.2,0,7);ctx.fill();ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(p.x,p.y,r*.38,0,7);ctx.fill()}
     ctx.globalCompositeOperation='source-over';
     if(S.mode==='strings'&&h.pr[0]<.9){const on=strPinch.has(h.role);ctx.strokeStyle=on?'#fff':'#ffffff44';ctx.lineWidth=on?4:1.5;ctx.beginPath();ctx.moveTo(P[4].x,P[4].y);ctx.lineTo(P[8].x,P[8].y);ctx.stroke()}
     ctx.restore()}
@@ -387,11 +406,13 @@ const HELP={
     <dt>Ses</dt><dd>Uzun tel kalın, kısa tel ince ses verir.</dd>
     <dt>Silmek</dt><dd>Telin bir ucunu tutup diğer ucuna götür.</dd></dl>
     <p>Dokunmatik: basılı tutup çek, tel oluşur. Kaydırınca çalar.</p>`],
-  theremin:['Theremin',`<p>Hiçbir şeye dokunmadan çalınan enstrüman. Tek elin yeter.</p><dl>
-    <dt>Elini aç</dt><dd>Ses gelir. Yumruk yapınca susar; notaları böyle ayırırsın.</dd>
-    <dt>Yukarı, aşağı</dt><dd>Nota değişir. Elini hafifçe titretirsen ses titrer.</dd>
+  theremin:['Theremin',`<p>Hiçbir şeye dokunmadan çalınır. Her elin ayrı bir ses.</p><dl>
+    <dt>Yükseklik</dt><dd>Notayı seçer. Elini hafifçe titretirsen ses titrer.</dd>
+    <dt>Parmaklar</dt><dd>Bir parmak tek ses, iki parmak ikili, üç parmak üçlü, açık el akor çalar.</dd>
+    <dt>Yumruk</dt><dd>Susar. Notaları böyle ayırırsın.</dd>
+    <dt>Tın</dt><dd>Başparmağını işaret parmağına değdirince kısa bir çan sesi çıkar; ritim tutmak için.</dd>
     <dt>Sağa, sola</dt><dd>Sesin rengi değişir. Vokal seste ağızdan çıkan bir ses gibi duyulur.</dd>
-    <dt>İkinci el</dt><dd>İstersen yüksekliğiyle ses düzeyini ayarlar.</dd></dl>
+    <dt>Yaklaş</dt><dd>Elini kameraya yaklaştırdıkça ses güçlenir.</dd></dl>
     <p>Dem açıkken arkada kök ses çalar; ne çalarsan çal uyumlu duyulur.</p>`],
 };
 function showHelp(){const[t,b]=HELP[S.mode];$('#helpTitle').textContent=t;$('#helpBody').innerHTML=b;$('#help').hidden=false}
@@ -407,7 +428,7 @@ $('#startBtn').onclick=()=>start(true);$('#noCamBtn').onclick=()=>start(false);
 $('#tHarp').onclick=()=>{initAudio();harpPreset()};
 $('#tClear').onclick=()=>{strings=[];saveStrings()};
 const toneBtn=$('#thTone');toneBtn.querySelector('small').textContent=TH_TONES[S.thTone];
-toneBtn.onclick=()=>{initAudio();const ks2=Object.keys(TH_TONES);S.thTone=ks2[(ks2.indexOf(S.thTone)+1)%ks2.length];toneBtn.querySelector('small').textContent=TH_TONES[S.thTone];save();if(th){th.stop();th=null}};
+toneBtn.onclick=()=>{initAudio();const ks2=Object.keys(TH_TONES);S.thTone=ks2[(ks2.indexOf(S.thTone)+1)%ks2.length];toneBtn.querySelector('small').textContent=TH_TONES[S.thTone];save();thStopAll()};
 $('#droneBtn').onclick=e=>{initAudio();S.drone=!S.drone;e.currentTarget.classList.toggle('on',S.drone);droneSet(S.drone)};
 $('#flipBtn').onclick=async()=>{S.facing=S.facing==='user'?'environment':'user';save();if(camOn){try{await startCam()}catch(e){status('Diğer kamera açılamadı');S.facing=S.facing==='user'?'environment':'user';try{await startCam()}catch(_){}}}};
 $('#keySel').innerHTML=NN.map((n,i)=>`<option value="${i}">${n}</option>`).join('');$('#keySel').value=S.key;
@@ -425,7 +446,7 @@ let lastW=W,lastH=H;addEventListener('resize',()=>{const fx=W/lastW,fy=H/lastH;i
 let wake=null;async function keepAwake(){try{if(navigator.wakeLock&&!document.hidden)wake=await navigator.wakeLock.request('screen')}catch(e){}}
 document.addEventListener('visibilitychange',()=>{if(document.hidden)releaseAll();else if(camOn)keepAwake()});
 setMode(S.mode);
-if(DEBUG)window.__ho={get strings(){return strings},get hands(){return hands},get tut(){return tut},get notes(){return plog.length},get det(){return[detN,detMs.toFixed(1)]},level(){if(!analyser)return -1;analyser.getByteTimeDomainData(waveData);let m=0;for(const v of waveData)m=Math.max(m,Math.abs(v-128));return m},get ac(){return ac&&ac.state},plog,get th(){return thInfo}};
+if(DEBUG)window.__ho={get strings(){return strings},get hands(){return hands},get tut(){return tut},get notes(){return plog.length},get det(){return[detN,detMs.toFixed(1)]},level(){if(!analyser)return -1;analyser.getByteTimeDomainData(waveData);let m=0;for(const v of waveData)m=Math.max(m,Math.abs(v-128));return m},get ac(){return ac&&ac.state},plog,get th(){const v=[...thVoices.values()].find(v=>performance.now()-v.seen<300);return v&&{m:v.m,target:v.target,count:v.count,vol:v.vol,n:thVoices.size}},get thv(){return [...thVoices.values()].map(v=>({count:v.count,target:v.target,vol:+v.vol.toFixed(2),pinch:v.pinch}))}};
 
 /* ---------- kayıt (video + istenirse mikrofon) ---------- */
 let mrec=null,chunks=[],recStart=0,recTimer,micStream=null,micNode=null;
