@@ -1,0 +1,635 @@
+'use strict';
+/* Do Re Koş! — sesinle yönettiğin koşu oyunu.
+   Ses yüksekliği → karakterin yüksekliği. Sessizlik → yere iner, koşar.
+   Notalar bilinen ezgilerin şeklinde dizilir; melodiyi söyleyen engellerden kendiliğinden geçer. */
+
+const $ = s => document.querySelector(s);
+const cv = $('#game'), ctx = cv.getContext('2d');
+
+/* ---------- Müzik sabitleri ---------- */
+const NOTE_NAMES = ['Do', 'Re', 'Mi', 'Fa', 'Sol', 'La', 'Si', "Do'"];
+const SEMIS = [0, 2, 4, 5, 7, 9, 11, 12];
+const COLORS = ['#ff4d6d', '#ff9f43', '#ffd93d', '#6bdb6b', '#3ed6d6', '#4d8bff', '#a66bff', '#ff6bd6'];
+const ABS = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+const absName = m => ABS[((Math.round(m) % 12) + 12) % 12] + (Math.floor(Math.round(m) / 12) - 1);
+const DEG = { Do: 0, Re: 1, Mi: 2, Fa: 3, Sol: 4, La: 5, Si: 6, "Do'": 7 };
+
+/* Kamu malı ezgiler. "Nota:vuruş" (vuruş yoksa 1). */
+const SONGS = {
+  merdiven: { name: 'Merdiven', phrases: ['Do Re Mi Fa Sol:2', 'Sol Fa Mi Re Do:2'] },
+  kuzu: { name: 'Mary’nin Kuzusu', phrases: ['Mi Re Do Re Mi Mi Mi:2', 'Re Re Re:2 Mi Sol Sol:2', 'Mi Re Do Re Mi Mi Mi Mi', 'Re Re Mi Re Do:3'] },
+  neseye: { name: 'Neşeye Övgü', phrases: ['Mi Mi Fa Sol Sol Fa Mi Re', 'Do Do Re Mi Mi:1.5 Re:.5 Re:2', 'Mi Mi Fa Sol Sol Fa Mi Re', 'Do Do Re Mi Re:1.5 Do:.5 Do:2'] },
+  jingle: { name: 'Jingle Bells', phrases: ['Mi Mi Mi:2 Mi Mi Mi:2', 'Mi Sol Do:1.5 Re:.5 Mi:3', 'Fa Fa Fa:1.5 Fa:.5 Fa Mi Mi Mi', 'Mi Re Re Mi Re:2 Sol:2'] },
+  dahadun: { name: 'Daha Dün Annemizin', phrases: ['Do Do Sol Sol La La Sol:2', 'Fa Fa Mi Mi Re Re Do:2', 'Sol Sol Fa Fa Mi Mi Re:2', 'Sol Sol Fa Fa Mi Mi Re:2', 'Do Do Sol Sol La La Sol:2', 'Fa Fa Mi Mi Re Re Do:2'] },
+  tembel: { name: 'Tembel Çocuk', phrases: ['Do Re Mi Do Do Re Mi Do', 'Mi Fa Sol:2 Mi Fa Sol:2', 'Sol:.5 La:.5 Sol:.5 Fa:.5 Mi Do Sol:.5 La:.5 Sol:.5 Fa:.5 Mi Do', 'Do Sol Do:2 Do Sol Do:2'] },
+  gam: { name: 'Gam Merdiveni', phrases: ["Do Re Mi Fa Sol La Si Do':2", "Do' Si La Sol Fa Mi Re Do:2"] },
+};
+const PLAYLISTS = [
+  ['merdiven', 'kuzu', 'neseye', 'jingle'],
+  ['gam', 'dahadun', 'neseye', 'tembel', 'jingle', 'kuzu'],
+];
+const parsePhrase = p => p.split(/\s+/).map(t => { const [n, b] = t.split(':'); return [DEG[n], b ? parseFloat(b) : 1]; });
+
+/* ---------- Ekran ---------- */
+let W = 0, H = 0, S = 1, VW = 960, VHt = 540, groundY = 470, slot = 50, R = 20, PX = 200, DPR = 1;
+function layout() {
+  W = innerWidth; H = innerHeight; DPR = Math.min(devicePixelRatio || 1, 2);
+  cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+  S = Math.min(H / 540, W / (W < H ? 440 : 680));
+  VW = W / S; VHt = H / S;
+  groundY = Math.min(VHt - 64, VHt / 2 + 220);
+  const N = G.nNotes;
+  slot = (540 - 64 - 72) / (N + 1);
+  R = Math.min(21, slot * 0.42);
+  PX = Math.min(VW * 0.24, 210);
+}
+const yOf = d => groundY - R - (d + 1) * slot;
+const degOfY = y => (groundY - R - y) / slot - 1;
+
+/* ---------- Durum ---------- */
+const G = {
+  state: 'demo', diff: 0, nNotes: 5, useMic: false, baseMidi: 55,
+  x: 0, speed: 170, t: 0, hearts: 3, score: 0, combo: 0, bestCombo: 0, notes: 0, perfect: 0, songsDone: 0,
+  coins: [], pillars: [], hangs: [], gaps: [], signs: [], songs: [], parts: [], passed: 0,
+  cursor: 0, songIdx: 0, round: 0, phraseId: 0, curSong: null,
+  shake: 0, flash: 0, muted: false,
+};
+const P = { d: -1, v: 0, ground: true, inv: 0, squash: 0, run: 0, mouth: 0 };
+const BEAT = 120;
+let best = 0; try { best = +localStorage.getItem('doReKos_best') || 0; } catch (e) {}
+
+/* ---------- Ses: mikrofon ve perde algılama (YIN) ---------- */
+let actx = null, analyser = null, buf = null, micOn = false, noiseFloor = 0.004;
+function audioCtx() {
+  if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+  if (actx.state === 'suspended') actx.resume();
+  return actx;
+}
+async function startMic() {
+  audioCtx();
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: false, autoGainControl: false } });
+  const src = actx.createMediaStreamSource(stream);
+  analyser = actx.createAnalyser(); analyser.fftSize = 2048;
+  src.connect(analyser);
+  buf = new Float32Array(analyser.fftSize);
+  micOn = true;
+}
+let yinD = null;
+function yin(b, sr) {
+  const half = b.length >> 1;
+  const minT = Math.max(2, Math.floor(sr / 1100)), maxT = Math.min(half - 2, Math.floor(sr / 65));
+  if (!yinD || yinD.length < maxT + 2) yinD = new Float32Array(maxT + 2);
+  const d = yinD; d[0] = 1; let run = 0;
+  for (let t = 1; t <= maxT + 1; t++) {
+    let s = 0;
+    for (let i = 0; i < half; i++) { const x = b[i] - b[i + t]; s += x * x; }
+    run += s; d[t] = run > 0 ? s * t / run : 1;
+  }
+  for (let t = minT; t <= maxT; t++) {
+    if (d[t] < 0.18) {
+      while (t + 1 <= maxT && d[t + 1] < d[t]) t++;
+      const x0 = d[t - 1], x1 = d[t], x2 = d[t + 1], den = x0 + x2 - 2 * x1;
+      const sh = den ? (x0 - x2) / (2 * den) : 0;
+      return { f: sr / (t + sh), c: 1 - x1 };
+    }
+  }
+  return null;
+}
+
+/* V: o anki “ses” — mikrofon, dokunma, klavye ya da demo yapay zekâsı */
+const V = { on: false, deg: 0, midi: 0, level: 0, hist: [], hang: 0, rms: 0 };
+const pointer = { down: false, y: 0 };
+let keyDeg = null;
+
+function degFromMidi(m) {
+  const N = G.nNotes, top = SEMIS[N - 1];
+  let rel = m - G.baseMidi;
+  // Bir oktav kayan sesleri (çok ince/kalın söyleyiş) aralığa katla
+  while (rel > top + 4) rel -= 12;
+  while (rel < -5) rel += 12;
+  if (rel <= 0) return Math.max(-0.6, rel / 2);
+  for (let i = 0; i < N - 1; i++) if (rel <= SEMIS[i + 1]) return i + (rel - SEMIS[i]) / (SEMIS[i + 1] - SEMIS[i]);
+  return Math.min(N - 0.4, N - 1 + (rel - top) / 2);
+}
+function readMic(dt) {
+  if (!micOn) { V.rms = 0; return null; }
+  analyser.getFloatTimeDomainData(buf);
+  let s = 0; for (let i = 0; i < buf.length; i++) s += buf[i] * buf[i];
+  const rms = Math.sqrt(s / buf.length);
+  V.rms = rms;
+  if (rms < Math.max(noiseFloor * 3, 0.008)) return null;
+  const r = yin(buf, actx.sampleRate);
+  if (!r || r.f < 65 || r.f > 1100) return null;
+  return 69 + 12 * Math.log2(r.f / 440);
+}
+function median(a) { const s = [...a].sort((x, y) => x - y); return s[s.length >> 1]; }
+function readVoice(dt) {
+  const m = readMic(dt);
+  V.level += ((micOn ? Math.min(1, V.rms * 12) : (V.on ? 0.6 : 0)) - V.level) * Math.min(1, dt * 15);
+  if (G.state === 'demo') return demoVoice();
+  if (pointer.down) { const d = degOfY(pointer.y); V.on = d > -0.55; V.deg = Math.min(G.nNotes - 0.4, Math.max(-0.4, d)); return; }
+  if (keyDeg !== null) { V.on = true; V.deg = keyDeg; return; }
+  if (m !== null) {
+    V.hist.push(m); if (V.hist.length > 5) V.hist.shift();
+    V.midi = median(V.hist); V.hang = 0.12; V.on = true; V.deg = degFromMidi(V.midi);
+  } else {
+    V.hang -= dt;
+    if (V.hang <= 0) { V.on = false; V.hist.length = 0; }
+  }
+}
+function demoVoice() {
+  const c = G.coins.find(c => !c.taken && c.x > G.x - 12 && c.x < G.x + BEAT * 1.3);
+  V.on = !!c; if (c) V.deg = c.d + Math.sin(G.t * 9) * 0.05;
+}
+
+/* ---------- Efekt sesleri ---------- */
+function tone(f, dur = 0.14, type = 'sine', vol = 0.05, slideTo = 0, when = 0) {
+  if (G.muted || !actx) return;
+  try {
+    const t0 = actx.currentTime + when, o = actx.createOscillator(), g = actx.createGain();
+    o.type = type; o.frequency.setValueAtTime(f, t0);
+    if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, t0 + dur);
+    g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(vol, t0 + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    o.connect(g).connect(actx.destination); o.start(t0); o.stop(t0 + dur + 0.02);
+  } catch (e) {}
+}
+const noteHz = d => 440 * Math.pow(2, (G.baseMidi + SEMIS[d] - 69) / 12);
+
+/* ---------- Seviye üretimi ---------- */
+function resetWorld() {
+  Object.assign(G, { x: 0, t: 0, speed: 170, hearts: 3, score: 0, combo: 0, bestCombo: 0, notes: 0, perfect: 0, songsDone: 0,
+    coins: [], pillars: [], hangs: [], gaps: [], signs: [], songs: [], parts: [], passed: 0, cursor: VW * 0.75, songIdx: 0, round: 0, curSong: null, shake: 0, flash: 0 });
+  Object.assign(P, { d: -1, v: 0, ground: true, inv: 0, squash: 0 });
+  buildSkyline();
+}
+function addSong() {
+  const list = PLAYLISTS[G.diff];
+  const key = list[G.songIdx % list.length];
+  const round = Math.floor(G.songIdx / list.length);
+  const n = G.songIdx; G.songIdx++;
+  const song = SONGS[key];
+  const level = n + round * 2;
+  const speed = Math.min(320, 170 * (1 + 0.06 * n + 0.12 * round));
+  const rec = { name: song.name + (round ? ' · ' + (round + 1) + '. tur' : ''), start: G.cursor, end: 0, total: 0, got: 0, perfect: 0, done: false, speed };
+  G.signs.push({ x: G.cursor, text: rec.name });
+  G.cursor += BEAT * 2.5;
+  const obsP = Math.min(0.6, n === 0 && !round ? 0.12 : 0.22 + 0.06 * level);
+  const gapP = Math.min(0.55, n === 0 && !round ? 0 : 0.15 + 0.07 * level);
+  for (const ph of song.phrases) {
+    const notes = parsePhrase(ph), id = ++G.phraseId, list2 = [];
+    for (const [d, b] of notes) {
+      if (d !== undefined && d < G.nNotes) { const c = { x: G.cursor, d, ph: id, song: rec, taken: false, missed: false }; G.coins.push(c); list2.push(c); rec.total++; }
+      G.cursor += b * BEAT;
+    }
+    const gap = list2.length >= 4 && Math.random() < gapP;
+    if (gap) G.gaps.push({ x0: list2[0].x + BEAT * 0.4, x1: list2[list2.length - 1].x - BEAT * 0.2 });
+    for (let i = 0; i < list2.length - 1; i++) {
+      const a = list2[i], b = list2[i + 1];
+      if (b.x - a.x < BEAT * 0.95 || Math.random() > obsP) continue;
+      const lo = Math.min(a.d, b.d), hi = Math.max(a.d, b.d), mx = (a.x + b.x) / 2;
+      const canP = lo >= 1 && !gap, canH = hi <= G.nNotes - 2;
+      if (canP && (!canH || Math.random() < 0.6)) G.pillars.push({ x: mx, w: 30, top: lo - 0.95 });
+      else if (canH) G.hangs.push({ x: mx, w: 36, bot: hi + 0.95, sw: Math.random() * 6 });
+    }
+    G.cursor += BEAT * 1.5; // nefes payı
+  }
+  rec.end = G.cursor - BEAT;
+  G.songs.push(rec);
+  G.cursor += BEAT * 1.5;
+}
+function ensureLevel() {
+  while (G.cursor < G.x + VW * 2.2) addSong();
+  const cut = G.x - PX - 200;
+  if (G.coins.length && G.coins[0].x < cut) {
+    G.coins = G.coins.filter(c => c.x > cut); G.pillars = G.pillars.filter(p => p.x > cut);
+    G.hangs = G.hangs.filter(p => p.x > cut); G.gaps = G.gaps.filter(g => g.x1 > cut); G.signs = G.signs.filter(s => s.x > cut - 200);
+  }
+}
+
+/* ---------- Oyun akışı ---------- */
+function show(id) { for (const s of ['menu', 'calib', 'pause', 'over']) $('#' + s).classList.toggle('hidden', s !== id); }
+function startGame() {
+  G.nNotes = G.diff ? 8 : 5; layout(); resetWorld();
+  G.state = 'play'; show(null); $('#hud').classList.remove('hidden');
+  updateHearts(); ensureLevel();
+}
+function toDemo() {
+  G.state = 'demo'; $('#hud').classList.add('hidden'); G.nNotes = G.diff ? 8 : 5; layout(); resetWorld(); ensureLevel();
+  $('#bestLine').textContent = best ? '🏆 En iyi skorun: ' + best : '';
+  show('menu');
+}
+function pauseGame() { if (G.state !== 'play') return; G.state = 'paused'; show('pause'); }
+function resumeGame() { if (G.state !== 'paused') return; G.state = 'play'; show(null); }
+function gameOver() {
+  G.state = 'over'; $('#hud').classList.add('hidden');
+  const isBest = G.score > best;
+  if (isBest) { best = G.score; try { localStorage.setItem('doReKos_best', best); } catch (e) {} }
+  $('#finalScore').textContent = G.score;
+  $('#overTitle').textContent = G.songsDone >= 3 ? 'Muhteşem konser!' : G.songsDone ? 'Güzel konser!' : 'Konser bitti!';
+  $('#newBest').textContent = isBest ? '🏆 Yeni rekor!' : 'En iyi: ' + best;
+  $('#stNotes').textContent = G.notes;
+  $('#stPerfect').textContent = (G.notes ? Math.round(G.perfect / G.notes * 100) : 0) + '%';
+  $('#stSongs').textContent = G.songsDone;
+  $('#stCombo').textContent = G.bestCombo;
+  setTimeout(() => show('over'), 500);
+  tone(392, 0.2, 'triangle', 0.06); tone(330, 0.2, 'triangle', 0.06, 0, 0.18); tone(262, 0.4, 'triangle', 0.06, 0, 0.36);
+}
+function updateHearts() {
+  $('#hearts').innerHTML = [0, 1, 2].map(i => i < G.hearts ? '❤' : '<span class="off">❤</span>').join('');
+}
+let bannerT = null;
+function banner(html, ms = 2200) {
+  const b = $('#banner'); b.innerHTML = html; b.classList.add('show');
+  clearTimeout(bannerT); bannerT = setTimeout(() => b.classList.remove('show'), ms);
+}
+function hurt() {
+  if (P.inv > 0 || G.state !== 'play') return;
+  G.hearts--; P.inv = 2; G.shake = 0.35; G.flash = 0.5; G.combo = 0; updateHearts();
+  tone(180, 0.25, 'square', 0.04, 70);
+  if (navigator.vibrate) try { navigator.vibrate(80); } catch (e) {}
+  if (G.hearts <= 0) gameOver();
+}
+
+/* ---------- Parçacıklar ---------- */
+function burst(x, y, color, n = 10) {
+  for (let i = 0; i < n; i++) { const a = Math.random() * 6.28, s = 60 + Math.random() * 140; G.parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 40, life: 0.6, max: 0.6, color, k: 'dot' }); }
+}
+function floatText(x, y, text, color) { G.parts.push({ x, y, vx: 0, vy: -50, life: 0.9, max: 0.9, color, k: 'text', text }); }
+
+/* ---------- Güncelleme ---------- */
+function overGap(x) { for (const g of G.gaps) if (x > g.x0 + R * 0.5 && x < g.x1 - R * 0.5) return true; return false; }
+function circleRect(cx, cy, r, x0, y0, x1, y1) {
+  const nx = Math.max(x0, Math.min(cx, x1)), ny = Math.max(y0, Math.min(cy, y1));
+  return (cx - nx) ** 2 + (cy - ny) ** 2 < r * r;
+}
+function update(dt) {
+  readVoice(dt);
+  updateTuner();
+  if (G.state !== 'play' && G.state !== 'demo') return;
+  const demo = G.state === 'demo';
+  G.t += dt;
+  // şarkı hızı
+  const cur = G.songs.find(s => G.x >= s.start - 40 && !s.done) || G.songs[G.songs.length - 1];
+  if (cur && cur !== G.curSong) { G.curSong = cur; if (!demo) banner('♪ ' + cur.name + '<small>' + (G.songsDone ? 'hazır mısın?' : 'notaları takip et, söyle!') + '</small>', 1800); }
+  if (cur) G.speed += (cur.speed - G.speed) * Math.min(1, dt * 0.8);
+  G.x += G.speed * dt;
+  P.inv = Math.max(0, P.inv - dt); G.shake = Math.max(0, G.shake - dt); G.flash = Math.max(0, G.flash - dt);
+  P.squash = Math.max(0, P.squash - dt * 4);
+
+  // fizik
+  const prev = P.d;
+  const support = demo || P.inv > 0 || !overGap(G.x);
+  if (V.on) {
+    const target = V.deg;
+    P.d += (target - P.d) * (1 - Math.exp(-dt * 13));
+    P.v = (P.d - prev) / Math.max(dt, 1e-3);
+    if (P.d < -1 && support) P.d = -1;
+    P.ground = false;
+  } else {
+    P.v -= 26 * dt; P.d += P.v * dt;
+    if (support && P.d <= -1) { if (!P.ground && P.v < -3) { P.squash = 1; burst(G.x, groundY, '#ffffff88', 5); } P.d = -1; P.v = 0; P.ground = true; }
+    else P.ground = false;
+    if (!support && P.d < -2.8) { hurt(); P.d = 1.2; P.v = 2; if (G.state === 'play') floatText(G.x, yOf(1), 'Hop! Söyle!', '#fff'); }
+  }
+  if (P.ground) P.run += dt * G.speed / 14;
+  const py = yOf(P.d);
+
+  // engeller
+  if (!demo && P.inv <= 0) {
+    for (const p of G.pillars) if (Math.abs(p.x - G.x) < 60 && circleRect(G.x, py, R * 0.82, p.x - p.w / 2, yOf(p.top) - 6, p.x + p.w / 2, groundY + 50)) { hurt(); break; }
+    for (const h of G.hangs) if (Math.abs(h.x - G.x) < 60 && circleRect(G.x, py, R * 0.82, h.x - h.w / 2, -2000, h.x + h.w / 2, yOf(h.bot))) { hurt(); break; }
+  }
+  // notalar
+  for (const c of G.coins) {
+    if (c.taken || c.missed) continue;
+    if (c.x < G.x - R - 14) { c.missed = true; if (!demo) G.combo = 0; continue; }
+    if (Math.abs(c.x - G.x) < R + 12 && Math.abs(yOf(c.d) - py) < R + slot * 0.32) {
+      c.taken = true; if (demo) continue;
+      const perfect = V.on && Math.abs(V.deg - c.d) < 0.22;
+      G.combo++; G.bestCombo = Math.max(G.bestCombo, G.combo); G.notes++; c.song.got++;
+      const mult = Math.min(4, 1 + Math.floor(G.combo / 8));
+      const pts = (perfect ? 25 : 10) * mult; G.score += pts;
+      if (perfect) { G.perfect++; c.song.perfect++; }
+      burst(c.x, yOf(c.d), COLORS[c.d], perfect ? 14 : 8);
+      floatText(c.x, yOf(c.d) - 24, (perfect ? 'Tam! +' : '+') + pts, perfect ? '#fff' : COLORS[c.d]);
+      tone(noteHz(c.d) * 2, 0.12, 'sine', 0.045);
+      if (perfect) tone(noteHz(c.d) * 3, 0.1, 'sine', 0.025, 0, 0.04);
+    }
+  }
+  // şarkı sonu
+  for (const s of G.songs) {
+    if (s.done || G.x < s.end) continue;
+    s.done = true; G.passed++; if (demo) continue;
+    const acc = s.total ? s.got / s.total : 0;
+    const stars = acc >= 0.95 ? 3 : acc >= 0.75 ? 2 : acc >= 0.5 ? 1 : 0;
+    G.songsDone++;
+    const bonus = stars * 150; G.score += bonus;
+    let extra = '';
+    if (stars >= 2 && G.hearts < 3) { G.hearts++; updateHearts(); extra = ' · +1 ❤'; }
+    banner((stars ? '★'.repeat(stars) + '<span style="opacity:.3">' + '★'.repeat(3 - stars) + '</span>' : 'Devam!') + '<small>' + s.name + ' · %' + Math.round(acc * 100) + ' isabet · +' + bonus + extra + '</small>', 2600);
+    if (stars) [0, 2, 4, 7].forEach((d, i) => tone(noteHz(Math.min(d, G.nNotes - 1)) * 2, 0.18, 'triangle', 0.04, 0, i * 0.09));
+  }
+  // nota izi
+  if (V.on && Math.random() < dt * 14) G.parts.push({ x: G.x - R, y: py + (Math.random() - 0.5) * R, vx: -40 - Math.random() * 40, vy: -20 - Math.random() * 30, life: 0.8, max: 0.8, color: COLORS[Math.max(0, Math.min(G.nNotes - 1, Math.round(V.deg)))], k: 'note', text: Math.random() < 0.5 ? '♪' : '♫' });
+  for (const p of G.parts) { p.life -= dt; p.x += p.vx * dt; p.y += p.vy * dt; if (p.k === 'dot') p.vy += 300 * dt; }
+  G.parts = G.parts.filter(p => p.life > 0);
+  ensureLevel();
+  P.mouth += ((V.on ? 0.35 + V.level * 0.65 : 0) - P.mouth) * Math.min(1, dt * 18);
+
+  // HUD
+  if (!demo) {
+    $('#score').textContent = G.score;
+    $('#combo').textContent = G.combo >= 4 ? 'Seri ' + G.combo + (G.combo >= 8 ? ' · x' + Math.min(4, 1 + Math.floor(G.combo / 8)) : '') : '';
+    if (cur) {
+      $('#songName').textContent = '♪ ' + cur.name;
+      $('#songBar').style.width = Math.max(0, Math.min(100, (G.x - cur.start) / (cur.end - cur.start) * 100)) + '%';
+    }
+  }
+}
+let tunerT = 0;
+function updateTuner() {
+  if (G.state !== 'play' || ++tunerT % 3) return;
+  $('#micBar').style.width = Math.round(Math.min(1, V.level) * 100) + '%';
+  if (!V.on) { $('#noteName').textContent = '—'; $('#noteName').style.color = '#fff'; $('#noteTune').textContent = 'sessiz'; return; }
+  const n = Math.max(0, Math.min(G.nNotes - 1, Math.round(V.deg))), off = V.deg - n;
+  $('#noteName').textContent = NOTE_NAMES[n]; $('#noteName').style.color = COLORS[n];
+  $('#noteTune').textContent = Math.abs(off) < 0.22 ? 'tam isabet ✓' : off > 0 ? 'biraz tiz ↓' : 'biraz pes ↑';
+}
+
+/* ---------- Çizim ---------- */
+const SKIES = [
+  ['#2b1b5a', '#8a3d8f', '#ff7a7a', '#ffc27a'],
+  ['#1b1450', '#4b2f8a', '#c24f8f', '#ff9a76'],
+  ['#070b2a', '#14215a', '#2f3f8f', '#6a5bb0'],
+];
+let skyline = [];
+function buildSkyline() {
+  skyline = [0.15, 0.4].map((f, li) => {
+    const arr = []; let x = 0;
+    while (x < 1800) { const w = 50 + Math.random() * 90, h = (li ? 90 : 140) + Math.random() * (li ? 150 : 170); arr.push({ x, w, h, win: Math.random() }); x += w + 4 + Math.random() * 14; }
+    return { f, arr, period: x };
+  });
+}
+function rr(x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
+const sx = wx => wx - G.x + PX;
+
+function draw() {
+  ctx.setTransform(DPR * S, 0, 0, DPR * S, 0, 0);
+  let shx = 0, shy = 0;
+  if (G.shake > 0) { shx = (Math.random() - 0.5) * 12 * G.shake / 0.35; shy = (Math.random() - 0.5) * 12 * G.shake / 0.35; }
+  ctx.translate(shx, shy);
+  // gökyüzü
+  const si = Math.floor(G.passed / 2) % SKIES.length, sk = SKIES[si];
+  const gr = ctx.createLinearGradient(0, 0, 0, groundY);
+  gr.addColorStop(0, sk[0]); gr.addColorStop(0.45, sk[1]); gr.addColorStop(0.8, sk[2]); gr.addColorStop(1, sk[3]);
+  ctx.fillStyle = gr; ctx.fillRect(-20, -20, VW + 40, VHt + 40);
+  // yıldızlar
+  ctx.fillStyle = '#ffffff';
+  for (let i = 0; i < 40; i++) { const x = ((i * 137.5 - G.x * 0.03) % (VW + 20) + VW + 20) % (VW + 20), y = (i * 61) % (groundY * 0.55); ctx.globalAlpha = 0.25 + 0.35 * Math.sin(G.t * 2 + i); ctx.fillRect(x, y, 2, 2); }
+  ctx.globalAlpha = 1;
+  // güneş/ay
+  ctx.fillStyle = si === 2 ? '#fff6d8' : '#ffe08a';
+  ctx.globalAlpha = 0.9; ctx.beginPath(); ctx.arc(VW * 0.78, groundY * 0.42, 46, 0, 6.28); ctx.fill(); ctx.globalAlpha = 1;
+  // silüet
+  skyline.forEach((L, li) => {
+    const off = (G.x * L.f) % L.period;
+    ctx.fillStyle = li ? '#2a1a4ccc' : '#3e2a6a99';
+    for (let k = 0; k < 3; k++) for (const b of L.arr) {
+      const x = b.x - off + k * L.period; if (x > VW || x + b.w < 0) continue;
+      ctx.fillRect(x, groundY - b.h, b.w, b.h);
+      if (li) { ctx.fillStyle = '#ffd36b55'; for (let wy = groundY - b.h + 12; wy < groundY - 10; wy += 18) for (let wx = x + 8; wx < x + b.w - 8; wx += 14) if (((wx * 7 + wy * 3 + b.win * 100) | 0) % 5 === 0) ctx.fillRect(wx, wy, 6, 8); ctx.fillStyle = '#2a1a4ccc'; }
+    }
+  });
+  // nota çizgileri (porte)
+  const sung = V.on ? Math.round(V.deg) : -9;
+  for (let d = 0; d < G.nNotes; d++) {
+    const y = yOf(d);
+    ctx.strokeStyle = COLORS[d]; ctx.globalAlpha = d === sung ? 0.55 : 0.16; ctx.lineWidth = d === sung ? 2 : 1;
+    ctx.setLineDash([6, 8]); ctx.beginPath(); ctx.moveTo(52, y); ctx.lineTo(VW, y); ctx.stroke(); ctx.setLineDash([]);
+    ctx.globalAlpha = d === sung ? 1 : 0.75; ctx.fillStyle = COLORS[d]; rr(8, y - 11, 40, 22, 11); ctx.fill();
+    ctx.fillStyle = '#1b0f35'; ctx.font = '600 12px Fredoka,system-ui'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(NOTE_NAMES[d], 28, y + 1);
+  }
+  ctx.globalAlpha = 1;
+  // zemin (çatılar)
+  const L = G.x - PX - 40, Rr = G.x - PX + VW + 40;
+  let segs = [[L, Rr]];
+  for (const g of G.gaps) { if (g.x1 < L || g.x0 > Rr) continue; const n = []; for (const [a, b] of segs) { if (g.x1 <= a || g.x0 >= b) n.push([a, b]); else { if (g.x0 > a) n.push([a, g.x0]); if (g.x1 < b) n.push([g.x1, b]); } } segs = n; }
+  ctx.fillStyle = '#0c0620'; ctx.fillRect(-20, groundY, VW + 40, VHt - groundY + 40);
+  for (const [a, b] of segs) {
+    const x0 = sx(a), x1 = sx(b);
+    ctx.fillStyle = '#24153f'; ctx.fillRect(x0, groundY, x1 - x0, VHt - groundY + 30);
+    ctx.fillStyle = '#ff9f6b'; ctx.fillRect(x0, groundY, x1 - x0, 6);
+    ctx.fillStyle = '#ffd3a8'; ctx.fillRect(x0, groundY, x1 - x0, 2);
+    ctx.fillStyle = '#ffd36b40';
+    const start = Math.ceil(a / 46) * 46;
+    for (let wx = start; wx < b - 20; wx += 46) for (let row = 0; row < 3; row++) if (((wx / 46 + row * 3) | 0) % 4 !== 1) ctx.fillRect(sx(wx) + 10, groundY + 22 + row * 34, 14, 18);
+  }
+  // boşluk uyarısı
+  for (const g of G.gaps) { const x0 = sx(g.x0), x1 = sx(g.x1); if (x1 < 0 || x0 > VW) continue; ctx.fillStyle = '#ff4d6d22'; ctx.fillRect(x0, groundY - 2, x1 - x0, 4); }
+  // tabelalar
+  ctx.textBaseline = 'middle';
+  for (const s of G.signs) {
+    const x = sx(s.x); if (x < -200 || x > VW + 200) continue;
+    ctx.fillStyle = '#5a3a2a'; ctx.fillRect(x - 3, groundY - 70, 6, 70);
+    ctx.font = '600 15px Fredoka,system-ui'; const w = ctx.measureText(s.text).width + 28;
+    ctx.fillStyle = '#ffcf3f'; rr(x - w / 2, groundY - 104, w, 36, 10); ctx.fill();
+    ctx.fillStyle = '#3a1d00'; ctx.textAlign = 'center'; ctx.fillText('♪ ' + s.text, x, groundY - 85);
+  }
+  // bacalar
+  for (const p of G.pillars) {
+    const x = sx(p.x); if (x < -60 || x > VW + 60) continue;
+    const top = yOf(p.top);
+    ctx.fillStyle = '#b5523b'; ctx.fillRect(x - p.w / 2, top, p.w, groundY - top);
+    ctx.fillStyle = '#8f3b2b'; for (let y = top + 10; y < groundY; y += 12) ctx.fillRect(x - p.w / 2, y, p.w, 2);
+    ctx.fillStyle = '#3a2340'; rr(x - p.w / 2 - 5, top - 8, p.w + 10, 12, 3); ctx.fill();
+    ctx.fillStyle = '#ffffff22'; for (let i = 0; i < 3; i++) { const t = (G.t * 0.7 + i / 3) % 1; ctx.beginPath(); ctx.arc(x + Math.sin(t * 6 + i) * 6, top - 12 - t * 50, 6 + t * 10, 0, 6.28); ctx.globalAlpha = 0.5 * (1 - t); ctx.fill(); }
+    ctx.globalAlpha = 1;
+  }
+  // asılı tabelalar
+  for (const h of G.hangs) {
+    const x = sx(h.x); if (x < -60 || x > VW + 60) continue;
+    const bot = yOf(h.bot), sw = Math.sin(G.t * 2 + h.sw) * 2;
+    ctx.strokeStyle = '#ffffff55'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x - 10, -10); ctx.lineTo(x - 10 + sw, bot - 30); ctx.moveTo(x + 10, -10); ctx.lineTo(x + 10 + sw, bot - 30); ctx.stroke();
+    ctx.fillStyle = '#2d1a52'; rr(x - h.w / 2 + sw, bot - 34, h.w, 34, 8); ctx.fill();
+    ctx.strokeStyle = '#ff4dd2'; ctx.lineWidth = 2.5; ctx.shadowColor = '#ff4dd2'; ctx.shadowBlur = 10; rr(x - h.w / 2 + 3 + sw, bot - 31, h.w - 6, 28, 6); ctx.stroke(); ctx.shadowBlur = 0;
+    ctx.fillStyle = '#ff9fe8'; ctx.font = '700 15px Fredoka,system-ui'; ctx.textAlign = 'center'; ctx.fillText('✕', x + sw, bot - 16);
+  }
+  // melodi yolu
+  ctx.lineWidth = 3; ctx.setLineDash([2, 7]); ctx.lineCap = 'round';
+  for (let i = 0; i < G.coins.length - 1; i++) {
+    const a = G.coins[i], b = G.coins[i + 1];
+    if (a.ph !== b.ph || sx(b.x) < 0 || sx(a.x) > VW) continue;
+    ctx.strokeStyle = '#ffffff40'; ctx.beginPath(); ctx.moveTo(sx(a.x), yOf(a.d)); ctx.lineTo(sx(b.x), yOf(b.d)); ctx.stroke();
+  }
+  ctx.setLineDash([]);
+  // nota altınları
+  const next = G.coins.find(c => !c.taken && !c.missed && c.x > G.x - 10);
+  for (const c of G.coins) {
+    if (c.taken) continue; const x = sx(c.x); if (x < -30 || x > VW + 30) continue;
+    const y = yOf(c.d) + Math.sin(G.t * 4 + c.x * 0.02) * 2, r = Math.min(15, slot * 0.34);
+    ctx.globalAlpha = c.missed ? 0.25 : 1;
+    ctx.shadowColor = COLORS[c.d]; ctx.shadowBlur = c === next ? 22 : 10;
+    ctx.fillStyle = COLORS[c.d]; ctx.beginPath(); ctx.arc(x, y, r, 0, 6.28); ctx.fill(); ctx.shadowBlur = 0;
+    ctx.fillStyle = '#ffffff66'; ctx.beginPath(); ctx.arc(x - r * 0.3, y - r * 0.35, r * 0.35, 0, 6.28); ctx.fill();
+    ctx.fillStyle = '#1b0f35'; ctx.font = '700 ' + Math.round(r * 1.2) + 'px system-ui'; ctx.textAlign = 'center'; ctx.fillText('♪', x, y + 1);
+    if (c === next && G.state === 'play') { ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.globalAlpha = 0.6 + 0.4 * Math.sin(G.t * 10); ctx.beginPath(); ctx.arc(x, y, r + 6, 0, 6.28); ctx.stroke(); }
+    ctx.globalAlpha = c.missed ? 0.2 : 0.85; ctx.fillStyle = '#fff'; ctx.font = '600 10px Fredoka,system-ui'; ctx.fillText(NOTE_NAMES[c.d], x, y + r + 9);
+    ctx.globalAlpha = 1;
+  }
+  // parçacıklar
+  for (const p of G.parts) {
+    const a = Math.max(0, p.life / p.max); ctx.globalAlpha = a; ctx.fillStyle = p.color;
+    if (p.k === 'dot') { ctx.beginPath(); ctx.arc(sx(p.x), p.y, 3 * a + 1, 0, 6.28); ctx.fill(); }
+    else if (p.k === 'note') { ctx.font = '700 16px system-ui'; ctx.textAlign = 'center'; ctx.fillText(p.text, sx(p.x), p.y); }
+    else { ctx.font = '700 16px Fredoka,system-ui'; ctx.textAlign = 'center'; ctx.strokeStyle = '#1b0f35'; ctx.lineWidth = 4; ctx.strokeText(p.text, sx(p.x), p.y); ctx.fillText(p.text, sx(p.x), p.y); }
+  }
+  ctx.globalAlpha = 1;
+  drawHero(PX, yOf(P.d), next);
+  // sesin göstergesi (sol kenar)
+  if (V.on && G.state === 'play') {
+    const y = yOf(Math.max(-0.5, V.deg)), col = COLORS[Math.max(0, Math.min(G.nNotes - 1, Math.round(V.deg)))];
+    ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(50, y - 8); ctx.lineTo(62, y); ctx.lineTo(50, y + 8); ctx.closePath(); ctx.fill();
+  }
+  if (G.flash > 0) { ctx.fillStyle = 'rgba(255,60,90,' + G.flash * 0.5 + ')'; ctx.fillRect(-20, -20, VW + 40, VHt + 40); }
+}
+
+function drawHero(x, y, next) {
+  if (P.inv > 0 && G.state === 'play' && Math.floor(P.inv * 12) % 2) ctx.globalAlpha = 0.4;
+  ctx.save(); ctx.translate(x, y);
+  // gölge
+  ctx.save(); ctx.globalAlpha *= 0.3; ctx.fillStyle = '#000'; const gh = Math.max(0.3, 1 - (groundY - R - y) / 300);
+  ctx.beginPath(); ctx.ellipse(0, groundY - y, R * gh, 4 * gh, 0, 0, 6.28); ctx.fill(); ctx.restore();
+  const sq = P.squash * 0.25, tilt = Math.max(-0.35, Math.min(0.35, -P.v * 0.04));
+  ctx.rotate(P.ground ? 0 : tilt);
+  ctx.scale(1 + sq, 1 - sq);
+  const r = R;
+  // bacaklar / kanatlar
+  if (P.ground) {
+    ctx.strokeStyle = '#ff8a2a'; ctx.lineWidth = 4; ctx.lineCap = 'round';
+    const a = Math.sin(P.run) * 0.8;
+    for (const s of [a, -a]) { ctx.beginPath(); ctx.moveTo(0, r * 0.7); ctx.lineTo(Math.sin(s) * r * 0.6, r + 2); ctx.stroke(); }
+  } else {
+    const f = Math.sin(G.t * (V.on ? 22 : 10)) * 0.6;
+    ctx.fillStyle = '#ffe28a';
+    for (const s of [-1, 1]) { ctx.save(); ctx.translate(-r * 0.55, s * r * 0.15); ctx.rotate(s * (0.6 + f)); ctx.beginPath(); ctx.ellipse(-r * 0.4, 0, r * 0.55, r * 0.22, 0, 0, 6.28); ctx.fill(); ctx.restore(); }
+  }
+  // gövde
+  const bg = ctx.createRadialGradient(-r * 0.3, -r * 0.4, r * 0.2, 0, 0, r);
+  bg.addColorStop(0, '#fff1a0'); bg.addColorStop(1, '#ffb52e');
+  ctx.fillStyle = bg; ctx.beginPath(); ctx.arc(0, 0, r, 0, 6.28); ctx.fill();
+  ctx.fillStyle = '#fff6d0'; ctx.beginPath(); ctx.ellipse(r * 0.1, r * 0.45, r * 0.55, r * 0.38, 0, 0, 6.28); ctx.fill();
+  // kulaklık
+  ctx.strokeStyle = '#ff4d8d'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(0, -r * 0.05, r * 0.98, Math.PI * 1.08, Math.PI * 1.92); ctx.stroke();
+  ctx.fillStyle = '#ff4d8d'; rr(-r * 1.1, -r * 0.35, r * 0.35, r * 0.6, 4); ctx.fill();
+  // gözler (sonraki notaya bakar)
+  const look = next ? Math.max(-1, Math.min(1, (yOf(next.d) - y) / 80)) : 0;
+  for (const ex of [r * 0.1, r * 0.55]) {
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.ellipse(ex, -r * 0.2, r * 0.22, r * 0.27, 0, 0, 6.28); ctx.fill();
+    ctx.fillStyle = '#1b0f35'; ctx.beginPath(); ctx.arc(ex + r * 0.07, -r * 0.2 + look * r * 0.1, r * 0.12, 0, 6.28); ctx.fill();
+  }
+  ctx.fillStyle = '#ff7a9a66'; ctx.beginPath(); ctx.arc(r * 0.75, r * 0.15, r * 0.14, 0, 6.28); ctx.fill();
+  // ağız
+  const m = P.mouth;
+  if (m > 0.08) { ctx.fillStyle = '#c2185b'; ctx.beginPath(); ctx.ellipse(r * 0.38, r * 0.3, r * 0.18 + m * r * 0.05, r * 0.08 + m * r * 0.26, 0, 0, 6.28); ctx.fill(); ctx.fillStyle = '#ff7aa8'; ctx.beginPath(); ctx.ellipse(r * 0.38, r * 0.3 + m * r * 0.14, r * 0.1, m * r * 0.09, 0, 0, 6.28); ctx.fill(); }
+  else { ctx.strokeStyle = '#1b0f35'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(r * 0.38, r * 0.15, r * 0.18, 0.3, Math.PI - 0.3); ctx.stroke(); }
+  ctx.restore(); ctx.globalAlpha = 1;
+}
+
+/* ---------- Döngü ---------- */
+let last = 0;
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000 || 0); last = now;
+  if (G.state === 'calib') calibStep(dt); else update(dt);
+  draw();
+  requestAnimationFrame(frame);
+}
+
+/* ---------- Ses ayarı ---------- */
+const CAL = { phase: 0, t: 0, rms: [], midis: [] };
+function buildScalePreview() {
+  $('#scalePreview').innerHTML = NOTE_NAMES.slice(0, G.nNotes).map((n, i) => '<span data-i="' + i + '">' + n + '</span>').join('');
+}
+function startCalib() {
+  G.nNotes = G.diff ? 8 : 5; layout(); buildScalePreview();
+  Object.assign(CAL, { phase: 0, t: 0, rms: [], midis: [] });
+  G.state = 'calib'; show('calib');
+  $('#calibGo').disabled = true; $('#calibMsg').textContent = 'Bir saniye sessiz kal…';
+  $('#calibHint').innerHTML = 'Rahat, <b>kalın</b> bir “Aaaa” söyle ve tut. Bu senin <b>Do</b>\'n olacak.';
+  $('#ringFill').style.strokeDashoffset = 327; $('#calibNote').textContent = '🤫';
+}
+function setBase(m, msg) {
+  G.baseMidi = Math.round(m); CAL.phase = 2;
+  $('#calibGo').disabled = false;
+  $('#calibMsg').innerHTML = msg || ('Senin Do\'n: <b>' + absName(G.baseMidi) + '</b> 🎉');
+  $('#calibHint').innerHTML = 'Şimdi aşağı yukarı söyleyerek notaları dene. Hazırsan koş!';
+  $('#ringFill').style.strokeDashoffset = 0;
+  tone(noteHz(0), 0.25, 'triangle', 0.05); tone(noteHz(2), 0.25, 'triangle', 0.05, 0, 0.12); tone(noteHz(4), 0.35, 'triangle', 0.05, 0, 0.24);
+}
+function calibStep(dt) {
+  CAL.t += dt;
+  const m = readMic(dt);
+  V.level = Math.min(1, V.rms * 12);
+  if (CAL.phase === 0) {
+    CAL.rms.push(V.rms);
+    $('#ringFill').style.strokeDashoffset = 327 * (1 - Math.min(1, CAL.t / 0.8));
+    if (CAL.t > 0.8) { noiseFloor = Math.min(0.03, median(CAL.rms)); CAL.phase = 1; CAL.t = 0; $('#calibMsg').textContent = 'Şimdi “Aaaa” de 🎤'; $('#ringFill').style.strokeDashoffset = 327; }
+    return;
+  }
+  if (m !== null) { V.hist.push(m); if (V.hist.length > 5) V.hist.shift(); V.midi = median(V.hist); V.hang = 0.15; V.on = true; }
+  else { V.hang -= dt; if (V.hang <= 0) { V.on = false; V.hist.length = 0; } }
+  if (CAL.phase === 1) {
+    $('#calibNote').textContent = V.on ? absName(V.midi) : '…';
+    if (V.on) { CAL.midis.push(V.midi); $('#ringFill').style.strokeDashoffset = 327 * (1 - Math.min(1, CAL.midis.length / 70)); }
+    if (CAL.midis.length >= 70) { let b = median(CAL.midis); if (b > 72) b -= 12; if (b < 40) b += 12; setBase(b); }
+  } else {
+    const d = V.on ? Math.round(degFromMidi(V.midi)) : -1;
+    $('#calibNote').textContent = V.on ? NOTE_NAMES[Math.max(0, Math.min(G.nNotes - 1, d))] : '…';
+    document.querySelectorAll('#scalePreview span').forEach((s, i) => { const hit = i === d; s.classList.toggle('hit', hit); s.style.background = hit ? COLORS[i] : ''; });
+  }
+}
+
+/* ---------- Girdiler ---------- */
+document.querySelectorAll('.seg button').forEach(b => b.onclick = () => {
+  G.diff = +b.dataset.diff;
+  document.querySelectorAll('.seg button').forEach(x => { x.classList.toggle('on', x === b); x.setAttribute('aria-checked', x === b); });
+  if (G.state === 'demo') { G.nNotes = G.diff ? 8 : 5; layout(); resetWorld(); ensureLevel(); }
+});
+$('#micStart').onclick = async () => {
+  try {
+    if (!micOn) { $('#micStart').textContent = 'Mikrofon açılıyor…'; await startMic(); }
+    G.useMic = true; startCalib();
+  } catch (e) {
+    $('#micStart').textContent = '🎤 Mikrofonla başla';
+    $('#bestLine').textContent = 'Mikrofona izin verilmedi. Tarayıcı ayarlarından izin ver ya da mikrofonsuz dene.';
+  }
+};
+$('#touchStart').onclick = () => { audioCtx(); G.useMic = false; G.baseMidi = 60; startGame(); banner('Ekrana dokun ve parmağını<br>yukarı-aşağı kaydır<small>ya da 1–' + G.nNotes + ' tuşlarını basılı tut</small>', 3200); };
+$('#calibGo').onclick = startGame;
+$('#calibRedo').onclick = startCalib;
+$('#presetLow').onclick = () => setBase(48, 'Kalın ses: Do = <b>C3</b>');
+$('#presetHigh').onclick = () => setBase(60, 'İnce ses: Do = <b>C4</b>');
+$('#pauseBtn').onclick = pauseGame;
+$('#resume').onclick = resumeGame;
+$('#toMenu').onclick = toDemo;
+$('#again').onclick = () => G.useMic ? startGame() : $('#touchStart').onclick();
+$('#overMenu').onclick = toDemo;
+$('#muteBtn').onclick = () => { G.muted = !G.muted; $('#muteBtn').textContent = G.muted ? '🔇' : '🔊'; };
+
+cv.addEventListener('pointerdown', e => { if (G.state !== 'play') return; pointer.down = true; pointer.y = e.clientY / S; cv.setPointerCapture(e.pointerId); });
+cv.addEventListener('pointermove', e => { if (pointer.down) pointer.y = e.clientY / S; });
+const up = () => { pointer.down = false; };
+cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+addEventListener('keydown', e => {
+  if (e.key === 'p' || e.key === 'P' || e.key === 'Escape') { G.state === 'play' ? pauseGame() : resumeGame(); return; }
+  const n = parseInt(e.key, 10);
+  if (n >= 1 && n <= G.nNotes) keyDeg = n - 1;
+});
+addEventListener('keyup', e => { const n = parseInt(e.key, 10); if (n >= 1 && n - 1 === keyDeg) keyDeg = null; });
+addEventListener('resize', layout);
+document.addEventListener('visibilitychange', () => { if (document.hidden) pauseGame(); });
+addEventListener('blur', () => { keyDeg = null; pointer.down = false; });
+
+/* ---------- Başlat ---------- */
+toDemo();
+requestAnimationFrame(frame);
