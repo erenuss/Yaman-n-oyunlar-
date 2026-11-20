@@ -304,7 +304,7 @@ function processFace(r) {
   const u = toS(lm[13]), l = toS(lm[14]), e1 = toS(lm[33]), e2 = toS(lm[263]);
   F.mouth = { x: (u.x + l.x) / 2, y: (u.y + l.y) / 2 }; F.size = Math.hypot(e1.x - e2.x, e1.y - e2.y); F.top = toS(lm[10]);
   const was = F.on; F.on = true; faceSeenAt = performance.now();
-  if (!F.mOpen && F.jaw > 0.42) { F.mOpen = true; if (was) emit('mouth', { pos: F.mouth }); } else if (F.mOpen && F.jaw < 0.18) F.mOpen = false;
+  if (!F.mOpen && F.jaw > 0.36) { F.mOpen = true; if (was) emit('mouth', { pos: F.mouth }); } else if (F.mOpen && F.jaw < 0.18) F.mOpen = false;
   if (!F.bUp && F.brow > 0.55) { F.bUp = true; if (was) emit('brow', { pos: F.top }); } else if (F.bUp && F.brow < 0.3) F.bUp = false;
 }
 function detect() {
@@ -323,33 +323,49 @@ const MIC = { on: false, an: null, buf: null, fb: null, rms: 0, lvl: 0, floor: 0
 function startMic(s) {
   try {
     const src = AC.createMediaStreamSource(s), hp = AC.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 60;
-    MIC.an = AC.createAnalyser(); MIC.an.fftSize = 2048; MIC.an.smoothingTimeConstant = 0;
+    MIC.an = AC.createAnalyser(); MIC.an.fftSize = 8192; MIC.an.smoothingTimeConstant = 0; // ~170 ms ses geçmişi
     src.connect(hp); hp.connect(MIC.an);
-    MIC.buf = new Float32Array(2048); MIC.fb = new Float32Array(1024); MIC.on = true;
+    MIC.buf = new Float32Array(8192); MIC.on = true;
     setInterval(micTick, 12);
   } catch (e) { console.error(e); }
 }
 function micTick() {
   if (!MIC.on || paused) return;
   const b = MIC.buf; MIC.an.getFloatTimeDomainData(b);
-  let s = 0; for (let i = 1536; i < 2048; i++) s += b[i] * b[i];
-  const rms = Math.sqrt(s / 512), now = AC.currentTime; MIC.rms = rms; MIC.lvl = Math.max(Math.min(1, rms * 9), MIC.lvl * 0.9);
-  if (rms < MIC.floor) MIC.floor = MIC.floor * 0.9 + rms * 0.1; else MIC.floor += (rms - MIC.floor) * 0.004;
-  MIC.floor = clamp(MIC.floor, 0.001, 0.08);
-  let th = Math.max(0.025, MIC.floor * 4); if (now < MIC.gate) th *= 2.6;
-  if (MIC.arm && rms > th && now - MIC.lastOn > 0.16) {
-    MIC.arm = false; MIC.peak = rms; MIC.lastOn = now;
-    MIC.an.getFloatFrequencyData(MIC.fb);
-    const hz = AC.sampleRate / 2048; let tot = 0, low = 0, cen = 0;
-    for (let i = 2; i < 1024; i++) { const p = Math.pow(10, MIC.fb[i] / 10); tot += p; cen += p * i * hz; if (i * hz < 1000) low += p; }
-    emit('voice', { centroid: cen / (tot || 1), lowR: low / (tot || 1), rms });
+  // Son ölçümden bu yana gelen bütün sesi 256 örneklik pencerelerle, eskiden yeniye tara:
+  // takip modeli ana iş parçacığını meşgul etse de kısa bir alkış/“bum” kaçmasın.
+  const now = AC.currentTime, sr = AC.sampleRate, N = b.length, nNew = clamp(Math.round((now - (MIC.lastT || now - 0.012)) * sr), 256, N);
+  MIC.lastT = now;
+  for (let w = Math.ceil(nNew / 256); w >= 1; w--) {
+    let s = 0; const a = N - w * 256; for (let i = a; i < a + 256; i++) s += b[i] * b[i];
+    micStep(Math.sqrt(s / 256), now - (w - 1) * 256 / sr, a);
   }
-  if (!MIC.arm) { MIC.peak = Math.max(MIC.peak, rms); if (rms < MIC.peak * 0.4) MIC.arm = true; }
   // mırıltı (yalnız serbest çalda)
   if (MODE === 'jam' && J.mic === 'hum' && ++MIC.n % 3 === 0) {
-    const r = rms > Math.max(0.012, MIC.floor * 2.2) ? yin(b, AC.sampleRate) : null;
+    const r = MIC.rms > Math.max(0.012, MIC.floor * 2.2) ? yin(b.subarray(b.length - 2048), AC.sampleRate) : null;
     if (r && r.c > 0.82 && r.f > 70 && r.f < 1000) { MIC.pitch = 69 + 12 * Math.log2(r.f / 440); MIC.conf = r.c; } else MIC.conf = 0;
   }
+}
+const MH = new Float32Array(8); let mhI = 0;
+function micStep(rms, at, a) {
+  let lo = 1; for (let i = 0; i < 8; i++) if (MH[i] < lo) lo = MH[i]; // son ~40 ms'nin en sessiz anı
+  MH[mhI++ & 7] = rms;
+  MIC.rms = rms; MIC.lvl = Math.max(Math.min(1, rms * 9), MIC.lvl * 0.95);
+  if (rms < MIC.floor) MIC.floor = MIC.floor * 0.95 + rms * 0.05; else MIC.floor += (rms - MIC.floor) * 0.002;
+  MIC.floor = clamp(MIC.floor, 0.001, 0.08);
+  let th = Math.max(0.025, MIC.floor * 4); if (at < MIC.gate) th *= 2.6;
+  if (MIC.arm && rms > th && rms > lo * 2.5 && at - MIC.lastOn > 0.16) { // yalnız yükselen ses: sönen kuyruk ikinci vuruş sayılmaz
+    MIC.arm = false; MIC.peak = rms; MIC.lastOn = at;
+    emit('voice', { ...voiceFeat(MIC.buf, a), rms, at });
+  }
+  if (!MIC.arm) { MIC.peak = Math.max(MIC.peak, rms); if (rms < MIC.peak * 0.4) MIC.arm = true; }
+}
+/* Vuruşun tınısı, vuruşun kendi örneklerinden: sıfır geçişinden parlaklık (Hz), 1 kHz altı enerji oranı.
+   “Bum” kalın ve tonlu; alkış ve “ts” tiz ve gürültülü. */
+function voiceFeat(b, a) {
+  const e = Math.min(b.length, a + 1024), k = 1 - Math.exp(-2 * Math.PI * 1000 / AC.sampleRate); let zc = 0, tot = 0, low = 0, y = 0;
+  for (let i = a; i < e; i++) { const x = b[i]; y += k * (x - y); tot += x * x; low += y * y; if (i > a && (x >= 0) !== (b[i - 1] >= 0)) zc++; }
+  return { centroid: zc / Math.max(1, e - a - 1) * AC.sampleRate / 2, lowR: tot ? low / tot : 0 };
 }
 let yinD = null;
 function yin(b, sr) { // perde (YIN)
@@ -393,7 +409,7 @@ function emit(type, info = {}) {
   if (lane === 1) { const n = performance.now(); if (n - lastClapEv < 220) return; lastClapEv = n; }
   laneFx[lane] = 1;
   if (info.pos) burst(info.pos.x, info.pos.y, LANES[lane].color, 14);
-  if (MODE === 'play') judge(lane, src); else teachHit(lane);
+  if (MODE === 'play') judge(lane, src, info.at); else teachHit(lane);
 }
 function curChord() {
   if (MODE === 'jam') return JAM_PROG[Math.floor(Math.max(0, AC.currentTime - J.t0) / (J.sd * 16)) % 4];
@@ -434,8 +450,8 @@ function gameStep(step, t) {
   if (bar >= G.chart.nBars) { if (bar === G.chart.nBars && s === 0) { kick(t); crash(t, 0.8); pad(CH[G.chart.chords[0]], t, 1.6, G.E); } return; }
   backing(s, t, CH[G.chart.chords[bar]], G.E, G.sd, { noSnare: G.chart.lanes.includes(1) });
 }
-function judge(lane, src) {
-  const now = AC.currentTime, te = now - srcLat(src) - outLat(), k = wk(lane);
+function judge(lane, src, at) {
+  const now = AC.currentTime, te = (at || now) - srcLat(src) - outLat(), k = wk(lane);
   let best = null, bd = 9;
   for (const n of G.chart.notes) { if (n.lane !== lane || n.st) continue; const d = te - n.t; if (Math.abs(d) < Math.abs(bd)) { bd = d; best = n; } if (n.t > te + 1) break; }
   if (!best || Math.abs(bd) > EARLY * k || bd > GOOD * k) { playLane(lane, null, now, 0.45); return; }
@@ -531,9 +547,9 @@ function teachSense() {
   if (l === 3) h = MIC.on ? `🎤 <span class="meter"><i style="width:${Math.round(MIC.lvl * 100)}%"></i></span>` : 'Mikrofon kapalı — K tuşu';
   else if (!camOn) h = 'Kamera kapalı — klavye ya da dokunma';
   else if (!handL && !faceL) h = modelErr ? 'Takip yüklenemedi — bağlantını kontrol et' : 'Kamera takibi yükleniyor…';
-  else if (l === 2) h = F.on ? `😮 <span class="meter"><i style="width:${Math.round(clamp(F.jaw / 0.42, 0, 1) * 100)}%"></i></span>` : 'Yüzünü kameraya göster 🙂';
+  else if (l === 2) h = F.on ? `😮 <span class="meter"><i style="width:${Math.round(clamp(F.jaw / 0.36, 0, 1) * 100)}%"></i></span>` : 'Yüzünü kameraya göster 🙂';
   else { const n = HS[0].on + HS[1].on; h = n ? `<span class="ok">✋ ${n === 2 ? 'İki el' : 'El'} görünüyor</span>` : 'Elini kameraya göster ✋'; }
-  if (el._h !== h) { el.innerHTML = h; el._h = h; } else if (l === 3 || l === 2) { const i = el.querySelector('.meter i'); if (i) i.style.width = Math.round((l === 3 ? MIC.lvl : clamp(F.jaw / 0.42, 0, 1)) * 100) + '%'; }
+  if (el._h !== h) { el.innerHTML = h; el._h = h; } else if (l === 3 || l === 2) { const i = el.querySelector('.meter i'); if (i) i.style.width = Math.round((l === 3 ? MIC.lvl : clamp(F.jaw / 0.36, 0, 1)) * 100) + '%'; }
 }
 
 /* ---------- serbest çal ---------- */
@@ -578,7 +594,7 @@ function jamGesture(type, info, src) {
   } else if (type === 'key') e = info.e;
   else if (type === 'mouth') { if (info.pos) burst(info.pos.x, info.pos.y, LANES[2].color, 16); lgOn.mouth = 1; return; }
   if (!e) return;
-  const now = AC.currentTime, te = now - srcLat(src) - outLat(), kq = Math.round((te - J.t0) / J.sd), tq = J.t0 + kq * J.sd;
+  const now = AC.currentTime, te = (info.at || now) - srcLat(src) - outLat(), kq = Math.round((te - J.t0) / J.sd), tq = J.t0 + kq * J.sd;
   const when = J.quant ? Math.max(now, tq) : now;
   jamPlay(e, when, 1); if (e.k === 'n' || e.k === 'clap' || e.k === 'tom') MIC.gate = Math.max(MIC.gate, when + outLat() + 0.16);
   const g = type === 'key' ? info.g : type; lgOn[g] = 1;
@@ -696,7 +712,7 @@ function drawLanes(vt) {
     ctx.fillText(L.emoji, x, lg.hitY + 1); ctx.globalAlpha = 1;
     ctx.font = '700 12px Rubik,system-ui'; ctx.fillStyle = hexA(L.color, 0.95); ctx.fillText(L.name.toUpperCase(), x, lg.hitY + lg.r + 16);
     // algılayıcı göstergesi
-    const lv = lane === 3 ? (MIC.on ? MIC.lvl : -1) : lane === 2 ? (F.on ? clamp(F.jaw / 0.42, 0, 1) : -1) : (HS[0].on || HS[1].on ? (lane === 1 ? (HS[0].on && HS[1].on ? clamp(2.2 - CLAP.r, 0, 1) : 0.15) : 1) : -1);
+    const lv = lane === 3 ? (MIC.on ? MIC.lvl : -1) : lane === 2 ? (F.on ? clamp(F.jaw / 0.36, 0, 1) : -1) : (HS[0].on || HS[1].on ? (lane === 1 ? (HS[0].on && HS[1].on ? clamp(2.2 - CLAP.r, 0, 1) : 0.15) : 1) : -1);
     const bw = lg.lw * 0.5, by = lg.hitY + lg.r + 28;
     ctx.fillStyle = 'rgba(255,255,255,.12)'; ctx.fillRect(x - bw / 2, by, bw, 4);
     if (lv >= 0) { ctx.fillStyle = L.color; ctx.fillRect(x - bw / 2, by, bw * lv, 4); }
