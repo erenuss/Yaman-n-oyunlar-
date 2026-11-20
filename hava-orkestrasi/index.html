@@ -37,6 +37,7 @@ button.on{background:linear-gradient(135deg,var(--acc),#8b5cff);border-color:tra
 @keyframes pulse{50%{box-shadow:0 0 0 8px #ff3b5c33}}
 #status{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom) + 110px);background:#000a;border:1px solid var(--line);padding:7px 14px;border-radius:20px;font-size:12px;color:var(--mut);z-index:4;pointer-events:none;white-space:nowrap;max-width:94vw;overflow:hidden;text-overflow:ellipsis}
 #status:empty{display:none}
+#soundBtn{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:9;padding:16px 22px;font-size:16px;background:#ff3b5c;color:#fff;border:0;border-radius:18px;box-shadow:0 10px 40px #000a;animation:pulse 1.2s infinite}
 #tut{position:fixed;left:50%;transform:translateX(-50%);top:calc(env(safe-area-inset-top) + 62px);width:min(560px,calc(100% - 24px));background:#120f22ee;border:1px solid #ff4fd855;border-radius:18px;padding:10px 12px;display:flex;align-items:center;gap:10px;z-index:6;font-size:14px;line-height:1.35;box-shadow:0 8px 30px #0008}
 #tut b{color:#ffd1f4}#tutTxt{flex:1}
 #tutDots{display:flex;flex-direction:column;gap:4px}#tutDots i{width:7px;height:7px;border-radius:50%;background:#ffffff30}#tutDots i.ok{background:var(--ok)}#tutDots i.cur{background:var(--acc);box-shadow:0 0 8px var(--acc)}
@@ -95,6 +96,7 @@ a.big{display:block;text-align:center;text-decoration:none;font-weight:700}
 <div id="status"></div>
 <div id="tut" hidden><div id="tutDots"></div><div id="tutTxt"></div><button id="tutSkip">Geç</button></div>
 <div id="toast"></div>
+<button id="soundBtn" hidden>🔇 Ses kapalı — açmak için dokun</button>
 <div id="bottom">
   <button id="beatBtn">🥁 Ritim</button>
   <button id="arpBtn">✨ Arpej</button>
@@ -114,7 +116,7 @@ a.big{display:block;text-align:center;text-decoration:none;font-weight:700}
     <div class="emoji">👌〰️🎸</div>
     <h1>Hava Orkestrası</h1>
     <p><b>Parmaklarınla havada ışıktan teller ger, üzerinden geçerek çal.</b> Gerdikçe ses incelir, perde basınca ses kayar. Ayrıca akor, havada davul ve theremin modları da var.</p>
-    <p>📱 iPhone'da ses gelmezse yandaki <b>sessiz modu</b> kapat.</p><p>Kamera görüntüsü <b>cihazından hiç çıkmaz</b>. El takibi tarayıcının içinde yapılır.</p>
+    <p>🔊 Sesin açık olduğundan emin ol. iPhone'da ses gelmezse yandaki <b>sessiz mod</b> düğmesini kapat ve ses tuşuyla sesi aç.</p><p>Kamera görüntüsü <b>cihazından hiç çıkmaz</b>. El takibi tarayıcının içinde yapılır.</p>
     <button class="big" id="startBtn">Kamerayı aç ve başla ▶</button>
     <button class="ghost" id="noCamBtn">Kamerasız dene (dokunarak)</button>
   </div>
@@ -212,10 +214,26 @@ rebuild();
 
 /* ---------- ses motoru ---------- */
 let ac=null,elecIn,bus,comp,master,revSend,delayNode,drumBus,recDest=null,analyser,noiseBuf,waveData;
+/* iPhone: sessiz mod düğmesi açıkken de çalsın + askıya alınan sesi uyandır */
+let unlockEl=null;const IOS=/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+function silentWav(){const sr=8000,n=800,b=new ArrayBuffer(44+n*2),v=new DataView(b),w=(o,t)=>{for(let i=0;i<t.length;i++)v.setUint8(o+i,t.charCodeAt(i))};
+  w(0,'RIFF');v.setUint32(4,36+n*2,true);w(8,'WAVE');w(12,'fmt ');v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);v.setUint32(24,sr,true);v.setUint32(28,sr*2,true);v.setUint16(32,2,true);v.setUint16(34,16,true);w(36,'data');v.setUint32(40,n*2,true);
+  return URL.createObjectURL(new Blob([b],{type:'audio/wav'}))}
+function unlockAudio(){
+  try{if(navigator.audioSession)navigator.audioSession.type='playback'}catch(e){}
+  if(IOS)try{if(!unlockEl){unlockEl=document.createElement('audio');unlockEl.src=silentWav();unlockEl.loop=true;unlockEl.setAttribute('playsinline','');unlockEl.setAttribute('x-webkit-airplay','deny')}const pr=unlockEl.play();if(pr&&pr.catch)pr.catch(()=>{})}catch(e){}
+  if(ac&&ac.state!=='running'){const pr=ac.resume();if(pr&&pr.catch)pr.catch(()=>{})}
+  try{if(ac){const b=ac.createBuffer(1,1,ac.sampleRate),src=ac.createBufferSource();src.buffer=b;src.connect(ac.destination);src.start(0)}}catch(e){}
+}
+function audioOK(){const ok=!ac||ac.state==='running';$('#soundBtn').hidden=ok}
+['pointerdown','touchend','keydown','click'].forEach(ev=>document.addEventListener(ev,()=>{if(ac&&ac.state!=='running')unlockAudio();setTimeout(audioOK,300)},{capture:true,passive:true}));
+setInterval(()=>{if(ac&&ac.state!=='running'&&!document.hidden){const pr=ac.resume();if(pr&&pr.catch)pr.catch(()=>{})}audioOK()},1000);
 function initAudio(){
-  if(ac){if(ac.state!=='running')ac.resume();return}
+  if(ac){if(ac.state!=='running')unlockAudio();return}
+  try{if(navigator.audioSession)navigator.audioSession.type='playback'}catch(e){}
   const AC=window.AudioContext||window.webkitAudioContext;
-  ac=new AC({latencyHint:'interactive'});
+  try{ac=new AC({latencyHint:'interactive'})}catch(e){ac=new AC()}
+  ac.onstatechange=audioOK;
   comp=ac.createDynamicsCompressor();comp.threshold.value=-12;comp.ratio.value=4;comp.attack.value=.003;comp.release.value=.2;
   master=ac.createGain();master.gain.value=S.vol;comp.connect(master);
   analyser=ac.createAnalyser();analyser.fftSize=1024;waveData=new Uint8Array(analyser.fftSize);
@@ -231,8 +249,9 @@ function initAudio(){
   const eLP=ac.createBiquadFilter();eLP.type='lowpass';eLP.frequency.value=5200;const eG=ac.createGain();eG.gain.value=.75;elecIn.connect(eLP);eLP.connect(eG);eG.connect(bus);
   const dRev=ac.createGain();dRev.gain.value=.12;drumBus.connect(dRev);dRev.connect(conv);
   noiseBuf=ac.createBuffer(1,ac.sampleRate,ac.sampleRate);const nd=noiseBuf.getChannelData(0);for(let i=0;i<nd.length;i++)nd[i]=Math.random()*2-1;
-  if(ac.state!=='running')ac.resume();
+  unlockAudio();
 }
+function hello(){if(!ac)return;const ns=[0,4,7,12].map(x=>48+S.key+x);ns.forEach((m,i)=>{try{ks(m,.55,ac.currentTime+.05+i*.07,null)}catch(e){}})}
 function impulse(sec){const len=Math.floor(ac.sampleRate*sec),b=ac.createBuffer(2,len,ac.sampleRate);for(let c=0;c<2;c++){const d=b.getChannelData(c);for(let i=0;i<len;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/len,3.2)}return b}
 
 const voices=[];
@@ -609,10 +628,10 @@ async function startCam(){
   vid.srcObject=stream;await vid.play().catch(()=>{});mirror=S.facing==='user';camOn=true;lastVT=-1;
 }
 async function start(withCam){
-  initAudio();keepAwake();$('#intro').hidden=true;renderTut();
+  initAudio();hello();keepAwake();$('#intro').hidden=true;renderTut();
   if(withCam){status('Kamera açılıyor…');try{await startCam()}catch(e){camOn=false;status('Kamera açılamadı: ekrana dokunarak çalabilirsin');setTimeout(()=>status(''),5000);showHelp();return}
     if(!landmarker){status('El takibi yükleniyor… (ilk açılışta birkaç saniye)');const ok=await modelP;if(!ok){status('El takibi yüklenemedi, internetini kontrol et. Dokunarak çalabilirsin.');return}}
-    renderTut();status('Ellerini kameraya göster 🖐️');setTimeout(()=>{if($('#status').textContent.startsWith('Ellerini'))status('')},4000)}
+    unlockAudio();renderTut();status('Ellerini kameraya göster 🖐️');setTimeout(()=>{if($('#status').textContent.startsWith('Ellerini'))status('')},4000)}
   showHelp();
 }
 function loop(){
@@ -634,7 +653,7 @@ function setMode(m){releaseAll();S.mode=m;save();document.querySelectorAll('#mod
 const visited=new Set();
 document.querySelectorAll('#modes button').forEach(b=>b.onclick=()=>{initAudio();setMode(b.dataset.mode);if(!localStorage.getItem('seen_'+b.dataset.mode)){try{localStorage.setItem('seen_'+b.dataset.mode,1)}catch(e){}showHelp()}});
 document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>{$('#'+b.dataset.close).hidden=true;if(b.dataset.close==='saved'){const v=$('#prev');v.pause()}});
-$('#helpBtn').onclick=showHelp;$('#setBtn').onclick=()=>{$('#settings').hidden=false};
+$('#helpBtn').onclick=showHelp;$('#soundBtn').onclick=()=>{initAudio();unlockAudio();setTimeout(()=>{audioOK();hello()},200)};$('#setBtn').onclick=()=>{$('#settings').hidden=false};
 $('#startBtn').onclick=()=>start(true);$('#noCamBtn').onclick=()=>start(false);
 $('#beatBtn').onclick=e=>{initAudio();S.beat=!S.beat;e.currentTarget.classList.toggle('on',S.beat);if(!S.beat)beatStep=-1};
 $('#arpBtn').onclick=e=>{initAudio();S.arp=!S.arp;e.currentTarget.classList.toggle('on',S.arp);if(chordIdx>=0){const i=chordIdx;chordOff();chordOn(i)}};
@@ -661,7 +680,7 @@ $('#loopBtn').onclick=loopPress;$('#loopClr').onclick=loopClear;
 let wake=null;async function keepAwake(){try{if(navigator.wakeLock&&!document.hidden)wake=await navigator.wakeLock.request('screen')}catch(e){}}
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&camOn)keepAwake()});
 setMode(S.mode);
-if(location.search.includes('debug'))window.__ho={get strings(){return strings},LOOP,get hands(){return hands},get tut(){return tut},get notes(){return noteCount},get det(){return[detN,detMs.toFixed(1)]}};
+if(location.search.includes('debug'))window.__ho={get strings(){return strings},LOOP,get hands(){return hands},get tut(){return tut},get notes(){return noteCount},get det(){return[detN,detMs.toFixed(1)]},level(){if(!analyser)return -1;analyser.getByteTimeDomainData(waveData);let m=0;for(const v of waveData)m=Math.max(m,Math.abs(v-128));return m},get ac(){return ac&&ac.state}};
 
 /* ---------- kayıt ---------- */
 let mrec=null,chunks=[],recStart=0,recTimer;
