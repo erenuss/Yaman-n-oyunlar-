@@ -6,7 +6,9 @@ Sesinle yönettiğin bir koşu oyunu. Tarayıcıda, telefonda ve bilgisayarda ç
 - **Sus** → yere iner ve çatılarda koşar.
 - **Notaları topla** → notalar bilinen ezgilerin şeklinde dizilidir; melodiyi söylersen bacalar ve neon tabelalar arasından kendiliğinden geçersin.
 - Notayı tam tutturursan **Tam!** bonusu, seri yaptıkça çarpan (x4'e kadar).
-- Çatı boşluklarının üstünde susarsan düşersin. Şarkıyı iyi bitirirsen +1 can.
+- **Nota kapısı:** yerden göğe duvar, yalnızca bir notanın hizasında açıklık var; o notayı söylemeden geçilmez (açıklık: Kolay ±70, Usta ±55, Pro ±40 cent).
+- **Çember:** uzun notalarda havada halka; notayı tutarak içinden geçersen bonus.
+- Bacalar, neon tabelalar ve çatı boşlukları da var: boşluk üstünde susarsan düşersin. Şarkıyı iyi bitirirsen +1 can.
 
 ## Tasarım
 
@@ -20,7 +22,7 @@ Sesinle yönettiğin bir koşu oyunu. Tarayıcıda, telefonda ve bilgisayarda ç
 - Mikrofon sesi önce 70–1200 Hz bandına süzülür (uğultu ve tıslama perdeyi şaşırtmasın), sonra cihazda **YIN** algoritmasıyla perdesi bulunur. Ses hiçbir yere gönderilmez.
 - Tek karelik oktav hataları elenir, küçük titreme yumuşatılır, gerçek nota değişimine anında uyulur. Hece aralarındaki kısa sessizlikte karakter düşmez.
 - Notalar gerçek perdelerdir (Do = C, Re = D …); oyun sırasında baz kaymaz, isabet gerçek notaya göre ölçülür.
-- **Okla senkron kuş:** kuş sesini soldaki okla aynı anda izler (gecikme yok). Nota tolerans içindeyse (vibratonun merkezine göre) kuş o notanın çizgisine tam oturur ve notanın renginde parlar; değilse soluk kalır, **nota toplayamaz** ve notalar arasında engellere çarpabilir. “Tam isabet” notanın üstünden geçerken yakalanan en iyi perdeye göre verilir.
+- **Okla birebir kuş:** kuş, sesinin tam olduğu yerde ve soldaki okla aynı karede durur (ekstra gecikme yok). Nota tolerans içindeyse (vibratonun merkezine göre) kuş notanın renginde parlar ve nota toplar; değilse soluk kalır ve toplayamaz. “Tam isabet” notanın üstünden geçerken yakalanan en iyi perdeye göre verilir. Perde penceresi oyunda gereken en kalın sese göre kısaltılır (~23 ms).
 - İpucu sesi çalarken hoparlörden mikrofona sızan yankı ses sayılmaz (yankı seviyesi ses ayarında Do çalınırken ölçülür). Kulaklık en iyisidir.
 - “Tam isabet” cent cinsinden ölçülür (±30 cent, ~150 ms ortalama), yani vibrato yapan cezalandırılmaz.
 Mikrofonla oynarken karakter **yalnızca sesle** hareket eder; dokunma ve tuşlar kapalıdır. Mikrofon yoksa “Mikrofonsuz dene” ile ekrana dokunup parmağını kaydırarak ya da 1–8 tuşlarıyla oynanabilir. P / Esc: duraklat.
