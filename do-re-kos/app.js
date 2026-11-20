@@ -601,9 +601,9 @@ function frame(now) {
 
 /* ---------- Ses ayarı: gerçek Do (C) notası ----------
    1) sessizlik → gürültü tabanı  2) rahat “Aaa” → hangi oktavdaki Do sana uygun
-   3) oyun Do'yu çalar, sen aynısını söylersin; ±35 cent içinde ~1 sn tutunca baz = tam C
+   3) oyun Do'yu çalar, sen aynısını söylersin; ±30 cent içinde 1.2 sn tutunca baz = tam C
    4) notaları dene */
-const CAL = { phase: 0, t: 0, run: 0, rms: [], midis: [], hold: 0, quiet: 0, refC: 48, tries: 0 };
+const CAL = { phase: 0, t: 0, run: 0, rms: [], midis: [], hold: 0, quiet: 0, refC: 48, tries: 0, sinceRef: 0 };
 const nearestC = m => 12 * Math.round(m / 12);
 const clampC = c => Math.max(36, Math.min(72, c));
 function buildScalePreview() {
@@ -613,7 +613,7 @@ function startCalib() {
   G.nNotes = G.diff ? 8 : 5; layout(); buildScalePreview();
   Object.assign(CAL, { phase: 0, t: 0, run: 0, rms: [], midis: [], hold: 0, quiet: 0, tries: 0 });
   G.state = 'calib'; show('calib');
-  $('#calibGo').disabled = true; $('#refPlay').classList.add('hidden');
+  $('#calibGo').disabled = true; for (const id of ['#refPlay', '#octSwap', '#tuneMeter', '#tuneTxt']) $(id).classList.add('hidden');
   $('#calibMsg').textContent = 'Bir saniye sessiz kal…';
   $('#calibHint').innerHTML = 'Önce sesinin kalın mı ince mi olduğuna bakacağız.';
   $('#ringFill').style.strokeDashoffset = 327; $('#calibNote').textContent = '🤫';
@@ -624,19 +624,20 @@ function playRef() {
   const was = G.muted; G.muted = false;               // referans Do her zaman duyulsun
   tone(f, 1.4, 'triangle', 0.12); tone(f * 2, 1.4, 'sine', 0.03);
   G.muted = was;
-  CAL.quiet = 1.6; CAL.hold = 0; TR.on = false;        // çalarken mikrofonu dinleme (kendi sesini Do sanmasın)
+  CAL.quiet = 1.6; CAL.hold = 0; CAL.sinceRef = 0; TR.on = false;        // çalarken mikrofonu dinleme (kendi sesini Do sanmasın)
   $('#calibNote').innerHTML = '🔊<small class="cn">Do · ' + absName(CAL.refC) + '</small>';
 }
 function toMatch(c) {
   CAL.refC = clampC(c); CAL.phase = 2; CAL.t = 0; CAL.hold = 0;
   $('#calibMsg').innerHTML = 'Dinle: bu <b>Do</b> (' + absName(CAL.refC) + ')';
   $('#calibHint').innerHTML = 'Şimdi aynı notayı “Aaaa” diye söyle ve tut. Halka dolunca baz tam Do olur.';
-  $('#refPlay').classList.remove('hidden');
+  for (const id of ['#refPlay', '#octSwap', '#tuneMeter', '#tuneTxt']) $(id).classList.remove('hidden');
+  $('#tuneTxt').textContent = 'Dinle, sonra aynısını söyle';
   playRef();
 }
 function setBase(m, msg) {
   G.baseMidi = G.calMidi = m; CAL.phase = 3;
-  $('#calibGo').disabled = false; $('#refPlay').classList.add('hidden');
+  $('#calibGo').disabled = false; for (const id of ['#refPlay', '#octSwap', '#tuneMeter', '#tuneTxt']) $(id).classList.add('hidden');
   $('#calibMsg').innerHTML = msg || ('Do = <b>' + absName(G.baseMidi) + '</b> · tam oturdu 🎉');
   $('#calibHint').innerHTML = 'Şimdi aşağı yukarı söyleyerek notaları dene. Hazırsan koş!';
   $('#ringFill').style.strokeDashoffset = 0;
@@ -664,20 +665,37 @@ function calibStep(dt) {
     // rahat sesinin hemen altındaki Do: kalın seste C3, ince seste C4 gibi
     if (CAL.midis.length >= 30) toMatch(12 * Math.floor((median(CAL.midis) + 3) / 12));
   } else if (CAL.phase === 2) {
-    if (!V.on) { $('#calibNote').innerHTML = '…<small class="cn">Do · ' + absName(CAL.refC) + '</small>'; CAL.hold = Math.max(0, CAL.hold - dt * 0.5); }
-    else {
-      const c = nearestC(V.midi), off = V.midi - c, cents = Math.round(off * 100);
+    // Do'ya ulaşmadan geçilmez: gösterge + sözlü yönlendirme, ±30 cent'te 1.2 sn tutmak gerekir
+    CAL.sinceRef += dt;
+    const nd = $('#needle'), tt = $('#tuneTxt');
+    if (!V.on) {
+      nd.classList.remove('on', 'ok');
+      $('#calibNote').innerHTML = '…<small class="cn">Do · ' + absName(CAL.refC) + '</small>';
+      if (CAL.hold > 0) tt.textContent = 'Sesi kesme, tut!';
+      CAL.hold = Math.max(0, CAL.hold - dt * 0.5);
+    } else {
+      // Hedef Do'ya göre fark (oktavdan bağımsız, −6…+6 yarım ton)
+      let off = V.midi - CAL.refC; off -= 12 * Math.round(off / 12);
+      const cents = Math.round(off * 100), ok = Math.abs(cents) <= 30;
+      const pos = 50 + Math.sign(off) * Math.sqrt(Math.min(6, Math.abs(off)) / 6) * 48;
+      nd.style.left = pos + '%'; nd.classList.add('on'); nd.classList.toggle('ok', ok);
+      const semi = Math.round(Math.abs(off));
       let txt;
-      if (Math.abs(off) > 0.5) txt = off > 0 ? 'daha kalın ↓' : 'daha ince ↑';
-      else txt = Math.abs(cents) <= 35 ? 'tam ✓ ' + (cents > 0 ? '+' : '') + cents : (cents > 0 ? 'biraz alçalt ↓ +' : 'biraz yükselt ↑ ') + cents;
-      $('#calibNote').innerHTML = (Math.abs(off) <= 0.5 ? 'Do' : absName(V.midi)) + '<small class="cn">' + txt + '</small>';
-      if (steady && Math.abs(cents) <= 35) {
+      if (ok) txt = CAL.hold > 0.4 ? 'Tam Do! Tut… ✓' : 'Tam Do ✓';
+      else if (semi >= 2) txt = (off > 0 ? 'Daha kalın söyle ↓' : 'Daha ince söyle ↑') + ' (' + semi + ' yarım ton)';
+      else if (Math.abs(cents) > 60) txt = off > 0 ? 'Biraz daha kalın ↓' : 'Biraz daha ince ↑';
+      else txt = off > 0 ? 'Çok az alçalt ↓ (+' + cents + ' cent)' : 'Çok az yükselt ↑ (' + cents + ' cent)';
+      tt.textContent = txt; tt.style.color = ok ? '#6bdb6b' : '';
+      $('#calibNote').innerHTML = (Math.abs(off) <= 0.5 ? 'Do' : absName(V.midi)) + '<small class="cn">' + (cents > 0 ? '+' : '') + cents + ' cent</small>';
+      if (steady && ok) {
         CAL.hold += dt;
-        if (CAL.hold >= 1) { setBase(clampC(c)); return; }    // farklı oktavda söylediyse o oktavın Do'su
-      } else CAL.hold = Math.max(0, CAL.hold - dt * 0.5);
+        if (CAL.hold >= 1.2) { setBase(clampC(nearestC(V.midi))); return; } // söylediği oktavın tam Do'su
+      } else CAL.hold = Math.max(0, CAL.hold - dt * 0.6);
+      if (CAL.hold > 0.05) CAL.sinceRef = 0;
     }
-    $('#ringFill').style.strokeDashoffset = 327 * (1 - Math.min(1, CAL.hold));
-    if (CAL.t > 14 && !CAL.tries) { CAL.tries = 1; $('#calibHint').innerHTML = 'Zorlanıyorsan <b>🔊</b> ile Do\'yu tekrar dinle ya da aşağıdaki hazır ayarlardan birini seç.'; }
+    $('#ringFill').style.strokeDashoffset = 327 * (1 - Math.min(1, CAL.hold / 1.2));
+    // uzun süre olmuyorsa Do'yu kendiliğinden tekrar çal
+    if (CAL.sinceRef > 9 && !V.on) { CAL.tries++; playRef(); $('#calibHint').innerHTML = 'Do\'yu bir kez daha dinle ve aynı yükseklikte söyle.' + (CAL.tries >= 2 ? ' Çok kalın ya da ince geliyorsa <b>Do\'yu bir oktav değiştir</b>.' : ''); }
   } else {
     const rel = foldRel(V.midi), d = V.on ? nearestNote(rel, G.nNotes) : -1;
     const cents = Math.round((rel - SEMIS[Math.max(0, d)]) * 100);
@@ -705,8 +723,10 @@ $('#touchStart').onclick = () => { audioCtx(); G.useMic = false; G.baseMidi = G.
 $('#calibGo').onclick = startGame;
 $('#calibRedo').onclick = startCalib;
 $('#refPlay').onclick = playRef;
-$('#presetLow').onclick = () => setBase(48, 'Kalın ses: Do = <b>C3</b>');
-$('#presetHigh').onclick = () => setBase(60, 'İnce ses: Do = <b>C4</b>');
+$('#octSwap').onclick = () => { // kalın/ince sese göre diğer oktavdaki Do
+  CAL.refC = CAL.refC >= 60 ? CAL.refC - 12 : CAL.refC + 12;
+  $('#calibMsg').innerHTML = 'Dinle: bu <b>Do</b> (' + absName(CAL.refC) + ')'; playRef();
+};
 $('#pauseBtn').onclick = pauseGame;
 $('#resume').onclick = resumeGame;
 $('#toMenu').onclick = toDemo;

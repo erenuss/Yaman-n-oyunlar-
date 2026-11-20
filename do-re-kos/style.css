@@ -82,3 +82,11 @@ h2{margin:0 0 4px;font-size:30px}
 }
 #calibNote .cn{position:absolute;bottom:24px;left:0;right:0;font-size:12px;font-weight:600;opacity:.8}
 #refPlay{margin:0 0 4px}
+.meter{display:flex;align-items:center;gap:8px;margin:2px 0 6px;font-size:12px;color:var(--muted)}
+.mtrack{position:relative;flex:1;height:30px;border-radius:15px;background:linear-gradient(90deg,#4d8bff55,#ffffff12 40%,#ffffff12 60%,#ff4d6d55)}
+.mtrack .zone{position:absolute;left:44%;width:12%;top:0;bottom:0;background:#6bdb6b55;border-radius:6px}
+.mtrack .mid{position:absolute;left:50%;top:-14px;transform:translateX(-50%);font-style:normal;font-weight:700;color:#fff;font-size:11px}
+.mtrack .mid::after{content:"";position:absolute;left:50%;top:14px;width:2px;height:30px;background:#fff;opacity:.6}
+#needle{position:absolute;top:3px;width:24px;height:24px;margin-left:-12px;border-radius:50%;background:#ffcf3f;box-shadow:0 0 12px #ffcf3f;left:50%;transition:left .08s,background .15s;opacity:.25}
+#needle.on{opacity:1}#needle.ok{background:#6bdb6b;box-shadow:0 0 14px #6bdb6b}
+.tunetxt{font-size:17px;font-weight:600;margin:2px 0 8px;min-height:24px}
