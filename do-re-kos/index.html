@@ -39,13 +39,14 @@
     <h1 class="logo"><span>Do</span> <span>Re</span> <span>Koş!</span></h1>
     <p class="sub">Sesinle koş, notayla uç.</p>
     <ol class="how">
-      <li><b>🎤</b><span><strong>Söyle</strong> — sesin incelikçe Mırıl yükselir</span></li>
-      <li><b>🤫</b><span><strong>Sus</strong> — yere iner ve koşar</span></li>
+      <li><b>🎤</b><span><strong>Notayı tuttur</strong> — Mırıl o notanın çizgisine çıkar</span></li>
+      <li><b>🤫</b><span><strong>Sus ya da detone ol</strong> — Mırıl alçalır, yere iner</span></li>
       <li><b>🎵</b><span><strong>Notaları topla</strong> — şarkıyı tamamla, engellerden kaç</span></li>
     </ol>
     <div class="seg" role="radiogroup" aria-label="Zorluk">
-      <button data-diff="0" class="on" role="radio" aria-checked="true">Kolay<small>5 nota · Do–Sol</small></button>
-      <button data-diff="1" role="radio" aria-checked="false">Usta<small>8 nota · tam oktav</small></button>
+      <button data-diff="0" class="on" role="radio" aria-checked="true">Kolay<small>5 nota · ipucu sesi</small></button>
+      <button data-diff="1" role="radio" aria-checked="false">Usta<small>8 nota · ipucu sesi</small></button>
+      <button data-diff="2" role="radio" aria-checked="false">Pro<small>8 nota · ipucusuz · çok hassas</small></button>
     </div>
     <button id="micStart" class="big">🎤 Mikrofonla başla</button>
     <button id="touchStart" class="ghost">Mikrofonsuz dene (dokun / fare)</button>
@@ -56,8 +57,8 @@
 <!-- SES AYARI -->
 <section id="calib" class="screen hidden">
   <div class="card">
-    <h2>Sesini tanıyalım</h2>
-    <p id="calibMsg" class="sub">Bir saniye sessiz kal…</p>
+    <h2>Do'yu bul</h2>
+    <p id="calibMsg" class="sub">Mikrofon hazırlanıyor, bir saniye sessiz kal…</p>
     <div class="ring"><svg viewBox="0 0 120 120"><circle cx="60" cy="60" r="52" class="track"/><circle cx="60" cy="60" r="52" id="ringFill" class="fill"/></svg><div id="calibNote">—</div></div>
     <div id="tuneMeter" class="meter hidden" aria-hidden="true">
       <span>kalın</span>
@@ -66,7 +67,7 @@
     </div>
     <p id="tuneTxt" class="tunetxt hidden" role="status"></p>
     <div id="scalePreview" class="scale"></div>
-    <p class="hint" id="calibHint">Önce sesinin kalın mı ince mi olduğuna bakacağız.</p>
+    <p class="hint" id="calibHint">Birazdan gerçek <b>Do</b> çalacak; aynısını söyleyeceksin.</p>
     <button id="refPlay" class="ghost hidden">🔊 Do'yu tekrar dinle</button>
     <div class="row">
       <button id="calibGo" class="big" disabled>Hazırım, koş! →</button>
