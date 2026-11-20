@@ -45,8 +45,8 @@ h2{margin:0 0 4px;font-size:30px}
 .how b{font-size:22px}
 .how strong{color:#fff}
 .how span{color:var(--muted)}
-.seg{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
-.seg button{background:#ffffff12;border:2px solid transparent;border-radius:16px;padding:10px;font-weight:600;font-size:17px}
+.seg{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px}
+.seg button{background:#ffffff12;border:2px solid transparent;border-radius:16px;padding:10px 6px;font-weight:600;font-size:17px}
 .seg button small{display:block;font-weight:500;font-size:12px;color:var(--muted)}
 .seg button.on{border-color:var(--sun);background:#ffcf3f22}
 .big{display:block;width:100%;padding:15px;border-radius:18px;background:linear-gradient(180deg,#ffdd55,#ffb52e);color:#3a1d00;font-weight:700;font-size:19px;box-shadow:0 5px 0 #c77a12;transition:transform .08s}

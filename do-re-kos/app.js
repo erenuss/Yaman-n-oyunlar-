@@ -56,10 +56,17 @@ const G = {
 };
 const P = { d: -1, v: 0, ground: true, inv: 0, squash: 0, run: 0, mouth: 0 };
 const BEAT = 120;
+/* Zorluk: Kolay 5 nota, Usta 8 nota, Pro 8 nota + dar tolerans + ipucu sesi yok */
+const DIFFS = [
+  { notes: 5, tol: 40, guide: true, list: 0 },
+  { notes: 8, tol: 30, guide: true, list: 1 },
+  { notes: 8, tol: 20, guide: false, list: 1 },
+];
+const DF = () => DIFFS[G.diff];
 let best = 0; try { best = +localStorage.getItem('doReKos_best') || 0; } catch (e) {}
 
 /* ---------- Ses: mikrofon ve perde algılama (YIN) ---------- */
-let actx = null, analyser = null, buf = null, micOn = false, noiseFloor = 0.004;
+let actx = null, analyser = null, buf = null, micOn = false, noiseFloor = 0.004, echoGate = 0;
 function audioCtx() {
   if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
   if (actx.state === 'suspended') actx.resume();
@@ -149,7 +156,7 @@ function relToDeg(rel, N, magnet = true) {
 /* PITCH-END */
 
 /* V: o anki “ses” — mikrofon, dokunma, klavye ya da demo yapay zekâsı */
-const V = { on: false, deg: 0, midi: 0, rel: 0, cents: 0, centsAvg: 0, note: -1, level: 0, rms: 0 };
+const V = { on: false, deg: 0, raw: 0, hist: [], span: 9, locked: false, lock: -1, cand: -1, candT: 0, offT: 0, midi: 0, rel: 0, cents: 0, centsAvg: 0, note: -1, level: 0, rms: 0 };
 const TR = makeTracker();
 const pointer = { down: false, y: 0 };
 let keyDeg = null;
@@ -169,7 +176,8 @@ function readMic() {
   let s = 0; for (let i = 0; i < buf.length; i++) s += buf[i] * buf[i];
   const rms = Math.sqrt(s / buf.length);
   V.rms = rms;
-  if (rms < Math.max(noiseFloor * 1.6, 0.004)) return null; // asıl ayrımı YIN güveni yapar
+  // asıl ayrımı YIN güveni yapar; ipucu sesi çalarken hoparlör yankısını ses sanma
+  if (rms < Math.max(noiseFloor * 1.6, 0.004, GUIDE.on ? echoGate : 0)) return null;
   const r = yin(buf, actx.sampleRate);
   if (!r || r.f < 65 || r.f > 1100) return null;
   return { m: 69 + 12 * Math.log2(r.f / 440), c: r.c };
@@ -181,20 +189,35 @@ function readVoice(dt) {
   V.level += ((micOn ? Math.min(1, V.rms * 12) : (V.on ? 0.6 : 0)) - V.level) * Math.min(1, dt * 15);
   if (G.state === 'demo') return demoVoice();
   // Mikrofonla oynarken elle yönetme yok: karakter yalnızca sesle hareket eder
-  if (!G.useMic && pointer.down) { const d = degOfY(pointer.y); V.on = d > -0.55; V.deg = Math.min(G.nNotes - 0.4, Math.max(-0.4, d)); V.cents = V.centsAvg = 0; return; }
-  if (!G.useMic && keyDeg !== null) { V.on = true; V.deg = keyDeg; V.cents = V.centsAvg = 0; return; }
+  if (!G.useMic && pointer.down) { const d = degOfY(pointer.y); V.on = d > -0.55; V.deg = V.raw = Math.min(G.nNotes - 0.4, Math.max(-0.4, d)); V.locked = V.on; V.cents = V.centsAvg = 0; return; }
+  if (!G.useMic && keyDeg !== null) { V.on = true; V.deg = V.raw = keyDeg; V.locked = true; V.lock = keyDeg; V.cents = V.centsAvg = 0; return; }
   V.on = TR.on;
-  if (V.on) {
-    V.midi = TR.sm; V.rel = foldRel(TR.sm); V.deg = relToDeg(V.rel, G.nNotes);
-    const n = nearestNote(V.rel, G.nNotes), c = (V.rel - SEMIS[n]) * 100;
-    // vibratoyu adil değerlendirmek için ~150 ms ortalama
-    V.centsAvg = n === V.note ? V.centsAvg + (c - V.centsAvg) * Math.min(1, dt / 0.15) : c;
-    V.note = n; V.cents = Math.round(c);
-  }
+  if (!V.on) { V.locked = false; V.lock = V.cand = -1; V.offT = 0; V.hist.length = 0; return; }
+  V.midi = TR.sm; V.rel = foldRel(TR.sm);
+  // son ~100 ms'deki perde aralığı: küçükse ses durağan (vibrato dahil), büyükse kayıyor
+  V.hist.push(TR.sm); if (V.hist.length > 6) V.hist.shift();
+  V.span = V.hist.length < 6 ? 9 : Math.max(...V.hist) - Math.min(...V.hist);
+  V.raw = relToDeg(V.rel, G.nNotes, false);              // sesin gerçek yeri (soldaki ok)
+  const n = nearestNote(V.rel, G.nNotes), c = (V.rel - SEMIS[n]) * 100;
+  // vibratoyu adil değerlendirmek için ~150 ms ortalama
+  V.centsAvg = n === V.note ? V.centsAvg + (c - V.centsAvg) * Math.min(1, dt / 0.1) : c;
+  V.note = n; V.cents = Math.round(c);
+  /* Nota kilidi: karakter yalnızca notayı tolerans içinde ~100 ms durağan tutunca o çizgiye çıkar.
+     Notalar arası sesler, kayan ses ve konuşma karakteri oynatmaz. */
+  // karar, notanın ortalama perdesine göre (vibratonun merkezi); anlık titreme cezalandırılmaz
+  if (Math.abs(V.centsAvg) <= DF().tol && V.raw >= -0.5 && V.raw <= G.nNotes - 0.5) {
+    // yeni notaya kilitlenmek için ses durağan olmalı (kayan ses / konuşma notadan geçerken yakalanmasın)
+    const steady = V.span < 0.6;
+    if (V.cand === n) V.candT = steady ? V.candT + dt : 0; else { V.cand = n; V.candT = 0; }
+    if (V.candT >= 0.08 || V.lock === n) { V.lock = n; V.offT = 0; }
+    else V.offT += dt;
+  } else { V.cand = -1; V.candT = 0; V.offT += dt; }
+  V.locked = V.lock >= 0 && V.offT < 0.4;   // nota geçişinde (kayarak giriş) eski çizgide bekler
+  V.deg = V.locked ? V.lock : V.raw;
 }
 function demoVoice() {
   const c = G.coins.find(c => !c.taken && c.x > G.x - 12 && c.x < G.x + BEAT * 1.3);
-  V.on = !!c; if (c) V.deg = c.d + Math.sin(G.t * 9) * 0.05;
+  V.on = V.locked = !!c; if (c) V.deg = V.raw = c.d;
 }
 
 /* ---------- Efekt sesleri ---------- */
@@ -211,6 +234,37 @@ function tone(f, dur = 0.14, type = 'sine', vol = 0.05, slideTo = 0, when = 0) {
 }
 const noteHz = d => 440 * Math.pow(2, (G.baseMidi + SEMIS[d] - 69) / 12);
 
+/* İpucu sesi: sıradaki notanın gerçek perdesi, notaya varmadan ~0.6 vuruş önce başlar ve
+   nota boyunca sürekli çalar (cümle içinde legato). Pro modda kapalı. */
+const GUIDE = { on: false, osc: null, osc2: null, gain: null, note: -1 };
+const GUIDE_VOL = 0.06;
+function guideUpdate() {
+  if (!actx) return;
+  let target = -1;
+  if (G.state === 'play' && DF().guide && !G.muted) {
+    const lead = BEAT * 0.6;
+    const c = G.coins.find(c => G.x >= c.x - lead && G.x < c.x - lead + c.len - 5);
+    if (c) target = c.d;
+  }
+  if (!GUIDE.gain) {
+    if (target < 0) return;
+    const g = actx.createGain(); g.gain.value = 0;
+    const o = actx.createOscillator(); o.type = 'sine';
+    const o2 = actx.createOscillator(); o2.type = 'triangle';
+    const g2 = actx.createGain(); g2.gain.value = 0.3;
+    o.connect(g); o2.connect(g2).connect(g); g.connect(actx.destination); o.start(); o2.start();
+    Object.assign(GUIDE, { osc: o, osc2: o2, gain: g });
+  }
+  const t = actx.currentTime;
+  if (target >= 0) {
+    const f = noteHz(target);
+    if (target !== GUIDE.note) { GUIDE.osc.frequency.setTargetAtTime(f, t, 0.012); GUIDE.osc2.frequency.setTargetAtTime(f, t, 0.012); }
+    GUIDE.gain.gain.setTargetAtTime(GUIDE_VOL, t, 0.03);
+  } else GUIDE.gain.gain.setTargetAtTime(0, t, 0.04);
+  GUIDE.on = target >= 0 || (GUIDE.note >= 0); // sönerken de bir kare daha yankıya dikkat
+  GUIDE.note = target;
+}
+
 /* ---------- Seviye üretimi ---------- */
 function resetWorld() {
   Object.assign(G, { x: 0, t: 0, speed: 170, hearts: 3, score: 0, combo: 0, bestCombo: 0, notes: 0, perfect: 0, songsDone: 0,
@@ -219,7 +273,7 @@ function resetWorld() {
   buildSkyline();
 }
 function addSong() {
-  const list = PLAYLISTS[G.diff];
+  const list = PLAYLISTS[DF().list];
   const key = list[G.songIdx % list.length];
   const round = Math.floor(G.songIdx / list.length);
   const n = G.songIdx; G.songIdx++;
@@ -234,7 +288,7 @@ function addSong() {
   for (const ph of song.phrases) {
     const notes = parsePhrase(ph), id = ++G.phraseId, list2 = [];
     for (const [d, b] of notes) {
-      if (d !== undefined && d < G.nNotes) { const c = { x: G.cursor, d, ph: id, song: rec, taken: false, missed: false }; G.coins.push(c); list2.push(c); rec.total++; }
+      if (d !== undefined && d < G.nNotes) { const c = { x: G.cursor, len: b * BEAT, d, ph: id, song: rec, taken: false, missed: false }; G.coins.push(c); list2.push(c); rec.total++; }
       G.cursor += b * BEAT;
     }
     const gap = list2.length >= 4 && Math.random() < gapP;
@@ -265,12 +319,12 @@ function ensureLevel() {
 /* ---------- Oyun akışı ---------- */
 function show(id) { for (const s of ['menu', 'calib', 'pause', 'over']) $('#' + s).classList.toggle('hidden', s !== id); }
 function startGame() {
-  G.nNotes = G.diff ? 8 : 5; layout(); resetWorld();
+  G.nNotes = DF().notes; layout(); resetWorld();
   G.state = 'play'; show(null); $('#hud').classList.remove('hidden');
   updateHearts(); ensureLevel();
 }
 function toDemo() {
-  G.state = 'demo'; $('#hud').classList.add('hidden'); G.nNotes = G.diff ? 8 : 5; layout(); resetWorld(); ensureLevel();
+  G.state = 'demo'; $('#hud').classList.add('hidden'); G.nNotes = DF().notes; layout(); resetWorld(); ensureLevel();
   $('#bestLine').textContent = best ? '🏆 En iyi skorun: ' + best : '';
   show('menu');
 }
@@ -335,12 +389,16 @@ function update(dt) {
   // fizik
   const prev = P.d;
   const support = demo || P.inv > 0 || !overGap(G.x);
-  if (V.on) {
-    const target = V.deg;
-    P.d += (target - P.d) * (1 - Math.exp(-dt * 24));
+  if (V.on && V.locked) {
+    P.d += (V.deg - P.d) * (1 - Math.exp(-dt * 22));       // tutturulan notanın çizgisine otur
     P.v = (P.d - prev) / Math.max(dt, 1e-3);
     if (P.d < -1 && support) P.d = -1;
     P.ground = false;
+  } else if (V.on) {
+    // ses var ama nota tutmuyor: yükselme yok, yavaşça alçal
+    P.v = Math.max(Math.min(P.v, 0) - 6 * dt, -1.6); P.d += P.v * dt;
+    if (support && P.d <= -1) { P.d = -1; P.v = 0; P.ground = true; } else P.ground = false;
+    if (!support && P.d < -2.8) { hurt(); P.d = 1.2; P.v = 0; }
   } else {
     P.v -= 26 * dt; P.d += P.v * dt;
     if (support && P.d <= -1) { if (!P.ground && P.v < -3) { P.squash = 1; burst(G.x, groundY, '#ffffff88', 5); } P.d = -1; P.v = 0; P.ground = true; }
@@ -361,15 +419,15 @@ function update(dt) {
     if (c.x < G.x - R - 14) { c.missed = true; if (!demo) G.combo = 0; continue; }
     if (Math.abs(c.x - G.x) < R + 12 && Math.abs(yOf(c.d) - py) < R + slot * 0.32) {
       c.taken = true; if (demo) continue;
-      const perfect = V.on && Math.abs(V.deg - c.d) < 0.3 && Math.abs(V.centsAvg) <= 30;
+      const perfect = V.on && V.locked && V.lock === c.d && Math.abs(V.centsAvg) <= DF().tol / 2;
       G.combo++; G.bestCombo = Math.max(G.bestCombo, G.combo); G.notes++; c.song.got++;
       const mult = Math.min(4, 1 + Math.floor(G.combo / 8));
       const pts = (perfect ? 25 : 10) * mult; G.score += pts;
       if (perfect) { G.perfect++; c.song.perfect++; }
       burst(c.x, yOf(c.d), COLORS[c.d], perfect ? 14 : 8);
       floatText(c.x, yOf(c.d) - 24, (perfect ? 'Tam! +' : '+') + pts, perfect ? '#fff' : COLORS[c.d]);
-      tone(noteHz(c.d) * 2, 0.12, 'sine', 0.045);
-      if (perfect) tone(noteHz(c.d) * 3, 0.1, 'sine', 0.025, 0, 0.04);
+      tone(noteHz(c.d) * 2, 0.3, 'triangle', 0.035);
+      if (perfect) tone(noteHz(c.d) * 3, 0.25, 'sine', 0.02, 0, 0.05);
     }
   }
   // şarkı sonu
@@ -407,9 +465,10 @@ function updateTuner() {
   if (G.state !== 'play' || ++tunerT % 3) return;
   $('#micBar').style.width = Math.round(Math.min(1, V.level) * 100) + '%';
   if (!V.on) { $('#noteName').textContent = '—'; $('#noteName').style.color = '#fff'; $('#noteTune').textContent = 'sessiz'; return; }
-  const n = Math.max(0, Math.min(G.nNotes - 1, Math.round(V.deg))), c = Math.round(V.centsAvg);
+  const n = G.useMic && V.note >= 0 ? V.note : Math.max(0, Math.min(G.nNotes - 1, Math.round(V.deg))), c = Math.round(V.centsAvg);
   $('#noteName').textContent = NOTE_NAMES[n]; $('#noteName').style.color = COLORS[n];
-  $('#noteTune').textContent = Math.abs(c) <= 30 ? 'tam isabet ✓' : c > 0 ? 'biraz tiz ↓' : 'biraz pes ↑';
+  $('#noteTune').textContent = Math.abs(c) <= DF().tol / 2 ? 'tam isabet ✓' : Math.abs(c) <= DF().tol ? (c > 0 ? 'tuttu, az tiz' : 'tuttu, az pes') : c > 0 ? 'tiz, alçalt ↓' : 'pes, yükselt ↑';
+  if (!V.locked) $('#noteName').style.color = '#ffffff88';
 }
 
 /* ---------- Çizim ---------- */
@@ -457,7 +516,7 @@ function draw() {
     }
   });
   // nota çizgileri (porte)
-  const sung = V.on ? Math.round(V.deg) : -9;
+  const sung = V.on && V.locked ? V.lock : -9;
   for (let d = 0; d < G.nNotes; d++) {
     const y = yOf(d);
     ctx.strokeStyle = COLORS[d]; ctx.globalAlpha = d === sung ? 0.55 : 0.16; ctx.lineWidth = d === sung ? 2 : 1;
@@ -543,7 +602,7 @@ function draw() {
   drawHero(PX, yOf(P.d), next);
   // sesin göstergesi (sol kenar)
   if (V.on && G.state === 'play') {
-    const y = yOf(Math.max(-0.5, V.deg)), col = COLORS[Math.max(0, Math.min(G.nNotes - 1, Math.round(V.deg)))];
+    const y = yOf(Math.max(-0.5, V.raw)), col = V.locked ? COLORS[Math.max(0, Math.min(G.nNotes - 1, V.lock))] : '#ffffffaa';
     ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(50, y - 8); ctx.lineTo(62, y); ctx.lineTo(50, y + 8); ctx.closePath(); ctx.fill();
   }
   if (G.flash > 0) { ctx.fillStyle = 'rgba(255,60,90,' + G.flash * 0.5 + ')'; ctx.fillRect(-20, -20, VW + 40, VHt + 40); }
@@ -596,6 +655,7 @@ let last = 0;
 function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000 || 0); last = now;
   if (G.state === 'calib') calibStep(dt); else update(dt);
+  guideUpdate();
   draw();
   requestAnimationFrame(frame);
 }
@@ -604,19 +664,19 @@ function frame(now) {
    1) sessizlik → gürültü tabanı  2) rahat “Aaa” → hangi oktavdaki Do sana uygun
    3) oyun Do'yu çalar, sen aynısını söylersin; ±30 cent içinde 1.2 sn tutunca baz = tam C
    4) notaları dene */
-const CAL = { phase: 0, t: 0, run: 0, rms: [], midis: [], hold: 0, quiet: 0, refC: 48, tries: 0, sinceRef: 0 };
+const CAL = { phase: 0, t: 0, run: 0, rms: [], midis: [], echo: [], hold: 0, quiet: 0, refC: 48, tries: 0, sinceRef: 0 };
 const nearestC = m => 12 * Math.round(m / 12);
 const clampC = c => Math.max(36, Math.min(72, c));
 function buildScalePreview() {
   $('#scalePreview').innerHTML = NOTE_NAMES.slice(0, G.nNotes).map((n, i) => '<span data-i="' + i + '">' + n + '</span>').join('');
 }
 function startCalib() {
-  G.nNotes = G.diff ? 8 : 5; layout(); buildScalePreview();
+  G.nNotes = DF().notes; layout(); buildScalePreview();
   Object.assign(CAL, { phase: 0, t: 0, run: 0, rms: [], midis: [], hold: 0, quiet: 0, tries: 0 });
   G.state = 'calib'; show('calib');
   $('#calibGo').disabled = true; for (const id of ['#refPlay', '#octSwap', '#tuneMeter', '#tuneTxt']) $(id).classList.add('hidden');
-  $('#calibMsg').textContent = 'Bir saniye sessiz kal…';
-  $('#calibHint').innerHTML = 'Önce sesinin kalın mı ince mi olduğuna bakacağız.';
+  $('#calibMsg').textContent = 'Mikrofon hazırlanıyor, bir saniye sessiz kal…';
+  $('#calibHint').innerHTML = 'Birazdan gerçek <b>Do</b> çalacak; aynısını söyleyeceksin.';
   $('#ringFill').style.strokeDashoffset = 327; $('#calibNote').textContent = '🤫';
 }
 function playRef() {
@@ -625,7 +685,7 @@ function playRef() {
   const was = G.muted; G.muted = false;               // referans Do her zaman duyulsun
   tone(f, 1.4, 'triangle', 0.12); tone(f * 2, 1.4, 'sine', 0.03);
   G.muted = was;
-  CAL.quiet = 1.6; CAL.hold = 0; CAL.sinceRef = 0; TR.on = false;        // çalarken mikrofonu dinleme (kendi sesini Do sanmasın)
+  CAL.quiet = 1.6; CAL.hold = 0; CAL.sinceRef = 0; CAL.echo = []; TR.on = false;        // çalarken mikrofonu dinleme (kendi sesini Do sanmasın)
   $('#calibNote').innerHTML = '🔊<small class="cn">Do · ' + absName(CAL.refC) + '</small>';
 }
 function toMatch(c) {
@@ -652,10 +712,15 @@ function calibStep(dt) {
   if (CAL.phase === 0) {
     CAL.rms.push(V.rms);
     $('#ringFill').style.strokeDashoffset = 327 * (1 - Math.min(1, CAL.t / 0.8));
-    if (CAL.t > 0.8) { noiseFloor = Math.min(0.03, median(CAL.rms)); CAL.phase = 1; CAL.t = 0; $('#calibMsg').textContent = 'Rahat bir “Aaaa” söyle 🎤'; $('#ringFill').style.strokeDashoffset = 327; }
+    if (CAL.t > 0.8) { noiseFloor = Math.min(0.03, median(CAL.rms)); $('#ringFill').style.strokeDashoffset = 327; toMatch(48); }
     return;
   }
-  if (CAL.quiet > 0) { CAL.quiet -= dt; return; }
+  if (CAL.quiet > 0) {
+    // Do çalarken hoparlörün mikrofona ne kadar sızdığını ölç (oyundaki ipucu sesi için)
+    CAL.quiet -= dt; if (CAL.quiet < 1.3 && CAL.quiet > 0.3) CAL.echo.push(V.rms);
+    if (CAL.quiet <= 0 && CAL.echo.length) echoGate = Math.min(0.03, median(CAL.echo) * (GUIDE_VOL * 1.3 / 0.15) * 2.5);
+    return;
+  }
   trackPitch(TR, r, dt);
   V.on = TR.on; V.midi = TR.sm;
   CAL.run = V.on ? (wasOn ? CAL.run + dt : 0) : 0;
@@ -709,7 +774,7 @@ function calibStep(dt) {
 document.querySelectorAll('.seg button').forEach(b => b.onclick = () => {
   G.diff = +b.dataset.diff;
   document.querySelectorAll('.seg button').forEach(x => { x.classList.toggle('on', x === b); x.setAttribute('aria-checked', x === b); });
-  if (G.state === 'demo') { G.nNotes = G.diff ? 8 : 5; layout(); resetWorld(); ensureLevel(); }
+  if (G.state === 'demo') { G.nNotes = DF().notes; layout(); resetWorld(); ensureLevel(); }
 });
 $('#micStart').onclick = async () => {
   try {
