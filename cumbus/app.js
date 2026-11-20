@@ -210,7 +210,7 @@ function loadModels() {
       const fs = await vision.FilesetResolver.forVisionTasks(`${CDN}/wasm`);
       const mk = async (Cls, opt) => { try { return await Cls.createFromOptions(fs, opt('GPU')); } catch (e) { return await Cls.createFromOptions(fs, opt('CPU')); } };
       const [h, f] = await Promise.allSettled([
-        mk(vision.HandLandmarker, d => ({ baseOptions: { modelAssetPath: HAND_M, delegate: d }, runningMode: 'VIDEO', numHands: 2, minHandDetectionConfidence: 0.55, minHandPresenceConfidence: 0.5, minTrackingConfidence: 0.5 })),
+        mk(vision.HandLandmarker, d => ({ baseOptions: { modelAssetPath: HAND_M, delegate: d }, runningMode: 'VIDEO', numHands: 2, minHandDetectionConfidence: 0.5, minHandPresenceConfidence: 0.45, minTrackingConfidence: 0.4 })),
         mk(vision.FaceLandmarker, d => ({ baseOptions: { modelAssetPath: FACE_M, delegate: d }, runningMode: 'VIDEO', numFaces: 1, outputFaceBlendshapes: true, minFaceDetectionConfidence: 0.5, minFacePresenceConfidence: 0.5, minTrackingConfidence: 0.5 })),
       ]);
       if (h.status === 'fulfilled') handL = h.value; if (f.status === 'fulfilled') faceL = f.value;
@@ -244,13 +244,22 @@ const toS = p => ({ x: W - (VM.ox + p.x * VM.dw), y: VM.oy + p.y * VM.dh });
 /* ---------- el hareketleri ---------- */
 const TIPS = [8, 12, 16, 20], MCP = [5, 9, 13, 17];
 const HAND_LINKS = [[0, 1], [1, 2], [2, 3], [3, 4], [0, 5], [5, 6], [6, 7], [7, 8], [5, 9], [9, 10], [10, 11], [11, 12], [9, 13], [13, 14], [14, 15], [15, 16], [13, 17], [0, 17], [17, 18], [18, 19], [19, 20]];
-const mkHand = () => ({ on: false, pin: -1, pinT: 0, fistArm: true, pts: null, size: 0, palm: null, flash: 0 });
+const mkHand = () => ({ on: false, now: false, seen: 0, f: [0, 1, 2, 3].map(() => ({ on: false, min: 1, max: 0 })), d: [1, 1, 1, 1], pin: -1, pinT: 0, fistArm: true, pts: null, size: 0, palm: null, flash: 0 });
 const HS = [mkHand(), mkHand()];
 const CLAP = { arm: true, r: 9, vel: 0, t: 0, both: false, mid: null };
 let handSeenAt = 0, faceSeenAt = 0;
-function processHands(lms) {
+/* Çimdik ölçüsü gerçek dünya 3B koordinatlarında (metre): elin açısından ve kameraya uzaklıktan bağımsız.
+   Başparmak ve parmak için ikişer nokta (uç + parmak yastığı) alınır, en yakın çift sayılır. */
+const P_ON = 0.03, P_NEAR = 0.042, P_SWING = 0.018, P_OFF = 0.01, P_REL = 0.016;
+const lerp3 = (a, b, k) => ({ x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k, z: (a.z || 0) + ((b.z || 0) - (a.z || 0)) * k });
+const d3 = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, (a.z || 0) - (b.z || 0));
+function pinchDist(w, k) {
+  const tip = w[TIPS[k]], pad = lerp3(w[TIPS[k] - 1], tip, 0.6), tt = w[4], tp = lerp3(w[3], tt, 0.6);
+  return Math.min(d3(tt, tip), d3(tt, pad), d3(tp, tip), d3(tp, pad));
+}
+function processHands(lms, wls = []) {
   const t = performance.now(), vw = vid.videoWidth || 640, vh = vid.videoHeight || 480;
-  const hs = lms.map(lm => { const px = lm.map(p => ({ x: p.x * vw, y: p.y * vh })); return { lm, px, sx: toS(lm[0]).x }; });
+  const hs = lms.map((lm, j) => { const px = lm.map(p => ({ x: p.x * vw, y: p.y * vh })); return { lm, px, w: wls[j], sx: toS(lm[0]).x }; });
   const slot = [null, null];
   if (hs.length >= 2) { hs.sort((a, b) => a.sx - b.sx); slot[0] = hs[0]; slot[1] = hs[1]; }
   else if (hs.length === 1) {
@@ -261,26 +270,39 @@ function processHands(lms) {
   if (hs.length) handSeenAt = t;
   for (let i = 0; i < 2; i++) {
     const h = slot[i], S = HS[i];
-    if (!h) { S.on = false; S.pin = -1; S.fistArm = true; continue; }
-    const P = h.px, d = (a, b) => Math.hypot(P[a].x - P[b].x, P[a].y - P[b].y), size = d(0, 9) || 1;
-    const was = S.on; S.on = true; S.size = size; S.pts = h.lm.map(toS);
+    S.now = !!h;
+    if (!h) { // takip bir iki kare kopabilir: durumu hemen silme
+      if (S.on && t - S.seen > 250) { Object.assign(S, mkHand()); }
+      continue;
+    }
+    const P = h.px, size = Math.hypot(P[0].x - P[9].x, P[0].y - P[9].y) || 1;
+    const w = h.w && h.w.length === 21 ? h.w : P.map(p => ({ x: p.x / size * 0.095, y: p.y / size * 0.095, z: 0 })); // yedek: 2B
+    const was = S.on && t - S.seen < 300; S.on = true; S.seen = t; S.size = size; S.pts = h.lm.map(toS);
     S.palm = [0, 5, 9, 13, 17].reduce((a, k) => ({ x: a.x + P[k].x / 5, y: a.y + P[k].y / 5 }), { x: 0, y: 0 });
-    const curl = TIPS.map((tp, k) => d(tp, 0) < d(MCP[k], 0) * 1.3), nCurl = curl.filter(Boolean).length;
+    const curl = TIPS.map((tp, k) => d3(w[tp], w[0]) < d3(w[MCP[k]], w[0]) * 1.3), nCurl = curl.filter(Boolean).length;
     // yumruk
     if (nCurl === 4 && S.fistArm) { S.fistArm = false; if (was) emit('fist', { hand: i, pos: S.pts[9] }); }
     if (nCurl <= 1) S.fistArm = true;
-    // çimdik: başparmak ucu ↔ parmak ucu
-    const pd = TIPS.map(tp => d(4, tp) / size);
-    if (S.pin >= 0 && pd[S.pin] > 0.45) S.pin = -1;
-    let c = 0; for (let k = 1; k < 4; k++) if (pd[k] < pd[c]) c = k;
-    const others = curl.filter((v, j) => v && j !== c).length;
-    if (pd[c] < 0.3 && c !== S.pin && (S.pin < 0 || pd[c] < pd[S.pin] * 0.7) && others < 3) {
-      S.pin = c;
-      if (was && t - S.pinT > 80) { S.pinT = t; S.flash = 1; const a = S.pts[4], b = S.pts[TIPS[c]]; emit('pinch', { hand: i, finger: c, pos: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 } }); }
+    // çimdik: her parmak ayrı; bırakmak için en yakın andan ~1 cm (en az 1.6 cm aralık) açmak yeter (hızlı ardışık vuruşlar kaçmaz)
+    const rising = [];
+    for (let k = 0; k < 4; k++) {
+      const dk = pinchDist(w, k), f = S.f[k]; S.d[k] = dk;
+      if (f.on) { f.min = Math.min(f.min, dk); if (dk > Math.max(P_REL, f.min + P_OFF)) { f.on = false; f.max = dk; } }
+      else { f.max = Math.max(f.max, dk); if (dk < P_ON || (dk < P_NEAR && f.max - dk > P_SWING)) { f.on = true; f.min = f.max = dk; rising.push(k); } }
+    }
+    let pin = -1; for (let k = 0; k < 4; k++) if (S.f[k].on && (pin < 0 || S.d[k] < S.d[pin])) pin = k;
+    S.pin = pin;
+    if (rising.length) {
+      let c = rising[0]; for (const k of rising) if (S.d[k] < S.d[c]) c = k;
+      const fisty = curl.filter((v, j) => v && j !== c).length >= 3;
+      if (was && !fisty && t - S.pinT > 70) {
+        S.pinT = t; S.flash = 1; const a = S.pts[4], b = S.pts[TIPS[c]];
+        emit('pinch', { hand: i, finger: c, pos: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 } });
+      }
     }
   }
   // alkış: iki avuç birbirine hızla yaklaşınca
-  if (HS[0].on && HS[1].on) {
+  if (HS[0].now && HS[1].now) {
     const a = HS[0].palm, b = HS[1].palm, r = Math.hypot(a.x - b.x, a.y - b.y) / ((HS[0].size + HS[1].size) / 2);
     const dt = Math.max(0.016, (t - CLAP.t) / 1000); CLAP.vel = CLAP.both ? (r - CLAP.r) / dt : 0;
     const p0 = HS[0].pts[9], p1 = HS[1].pts[9]; CLAP.mid = { x: (p0.x + p1.x) / 2, y: (p0.y + p1.y) / 2 };
@@ -311,8 +333,14 @@ function detect() {
   if (!camOn || vid.readyState < 2 || vid.currentTime === lastVT) return;
   lastVT = vid.currentTime; frameN++; vmap();
   const now = performance.now();
-  if (handL) { try { const r = handL.detectForVideo(vid, now); processHands(r.landmarks || []); } catch (e) {} }
-  if (faceL && (frameN % 2 === 0 || !handL)) { try { const r = faceL.detectForVideo(vid, now); processFace(r); } catch (e) {} }
+  // yalnız gereken model çalışır: ilk şarkılarda yüz takibi el takibini yavaşlatmasın
+  const lanes = G.chart ? G.chart.lanes : [];
+  const needH = MODE === 'jam' || (MODE === 'play' && (lanes.includes(0) || lanes.includes(1))) || (MODE === 'teach' && T.lane <= 1);
+  const needF = MODE === 'jam' || (MODE === 'play' && lanes.includes(2)) || (MODE === 'teach' && T.lane === 2);
+  if (handL && needH) { try { const r = handL.detectForVideo(vid, now); processHands(r.landmarks || [], r.worldLandmarks || []); } catch (e) {} }
+  else if (HS[0].on || HS[1].on) { HS[0] = mkHand(); HS[1] = mkHand(); }
+  if (faceL && needF && (frameN % 2 === 0 || !needH || !handL)) { try { const r = faceL.detectForVideo(vid, now); processFace(r); } catch (e) {} }
+  else if (!needF) F.on = false;
   detMs = detMs * 0.9 + (performance.now() - now) * 0.1;
 }
 const camLat = () => 0.05 + Math.min(0.08, detMs / 1000) + SV.lc;
@@ -688,6 +716,10 @@ function drawBody(jam) {
       ctx.fillStyle = on ? col : 'rgba(255,255,255,.85)'; ctx.beginPath(); ctx.arc(p.x, p.y, on ? 9 : 5, 0, 7); ctx.fill();
       if (jam) { const m = JAM_NOTES[hi][k]; ctx.font = '600 12px Rubik,system-ui'; ctx.textAlign = 'center'; ctx.fillStyle = on ? col : 'rgba(255,255,255,.7)'; ctx.fillText(SOLF[m % 12], p.x, p.y - 13); }
     }
+    // yakınlık çizgisi: başparmak en yakın parmağa yaklaştıkça parlar
+    let c = 0; for (let k = 1; k < 4; k++) if (S.d[k] < S.d[c]) c = k;
+    const near = clamp((0.075 - S.d[c]) / (0.075 - P_ON), 0, 1);
+    if (near > 0) { const q = P[TIPS[c]]; ctx.strokeStyle = S.pin >= 0 ? LANES[0].color : `rgba(255,210,63,${near * 0.8})`; ctx.lineWidth = 2 + near * 3; ctx.beginPath(); ctx.moveTo(P[4].x, P[4].y); ctx.lineTo(q.x, q.y); ctx.stroke(); }
     ctx.fillStyle = S.pin >= 0 ? LANES[0].color : '#fff'; ctx.beginPath(); ctx.arc(P[4].x, P[4].y, 6, 0, 7); ctx.fill();
     if (S.flash > 0) { const a = P[4]; ctx.strokeStyle = `rgba(255,210,63,${S.flash})`; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(a.x, a.y, 10 + (1 - S.flash) * 30, 0, 7); ctx.stroke(); S.flash = Math.max(0, S.flash - 0.08); }
   });
