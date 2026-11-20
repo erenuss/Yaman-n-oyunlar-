@@ -80,3 +80,5 @@ h2{margin:0 0 4px;font-size:30px}
   .card{padding:20px 16px;border-radius:22px}
   .how li{font-size:13px;padding:8px 10px}
 }
+#calibNote .cn{position:absolute;bottom:24px;left:0;right:0;font-size:12px;font-weight:600;opacity:.8}
+#refPlay{margin:0 0 4px}
