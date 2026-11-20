@@ -2,7 +2,7 @@
 
 Sesinle yönettiğin bir koşu oyunu. Tarayıcıda, telefonda ve bilgisayarda çalışır.
 
-- **Notayı tuttur** → Mırıl yalnızca bir notayı doğru söylediğinde o notanın çizgisine çıkar. Notalar arası sesler, kayan ses ya da konuşma onu yükseltmez; detone kalırsan yavaşça alçalır.
+- **Notayı tuttur** → Mırıl sesini anında izler; bir notayı doğru söylediğinde o notanın çizgisine oturup parlar ve notayı toplar. Detone kalırsan soluklaşır ve nota toplayamaz.
 - **Sus** → yere iner ve çatılarda koşar.
 - **Notaları topla** → notalar bilinen ezgilerin şeklinde dizilidir; melodiyi söylersen bacalar ve neon tabelalar arasından kendiliğinden geçersin.
 - Notayı tam tutturursan **Tam!** bonusu, seri yaptıkça çarpan (x4'e kadar).
@@ -20,7 +20,7 @@ Sesinle yönettiğin bir koşu oyunu. Tarayıcıda, telefonda ve bilgisayarda ç
 - Mikrofon sesi önce 70–1200 Hz bandına süzülür (uğultu ve tıslama perdeyi şaşırtmasın), sonra cihazda **YIN** algoritmasıyla perdesi bulunur. Ses hiçbir yere gönderilmez.
 - Tek karelik oktav hataları elenir, küçük titreme yumuşatılır, gerçek nota değişimine anında uyulur. Hece aralarındaki kısa sessizlikte karakter düşmez.
 - Notalar gerçek perdelerdir (Do = C, Re = D …); oyun sırasında baz kaymaz, isabet gerçek notaya göre ölçülür.
-- **Nota kilidi:** sesin en yakın notaya uzaklığı cent cinsinden ölçülür; tolerans içinde ve durağan (~100 ms) ise karakter o notanın çizgisine kilitlenir. Nota geçişinde (kayarak giriş) 0.4 sn eski çizgide bekler. Soldaki ok sesinin gerçek yerini her an gösterir.
+- **Okla senkron kuş:** kuş sesini soldaki okla aynı anda izler (gecikme yok). Nota tolerans içindeyse (vibratonun merkezine göre) kuş o notanın çizgisine tam oturur ve notanın renginde parlar; değilse soluk kalır, **nota toplayamaz** ve notalar arasında engellere çarpabilir. “Tam isabet” notanın üstünden geçerken yakalanan en iyi perdeye göre verilir.
 - İpucu sesi çalarken hoparlörden mikrofona sızan yankı ses sayılmaz (yankı seviyesi ses ayarında Do çalınırken ölçülür). Kulaklık en iyisidir.
 - “Tam isabet” cent cinsinden ölçülür (±30 cent, ~150 ms ortalama), yani vibrato yapan cezalandırılmaz.
 Mikrofonla oynarken karakter **yalnızca sesle** hareket eder; dokunma ve tuşlar kapalıdır. Mikrofon yoksa “Mikrofonsuz dene” ile ekrana dokunup parmağını kaydırarak ya da 1–8 tuşlarıyla oynanabilir. P / Esc: duraklat.
