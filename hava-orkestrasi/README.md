@@ -9,6 +9,8 @@ Kameraya el hareketleriyle müzik yapma uygulaması. Telefonda ve bilgisayarda t
   - Uzun tel kalın, kısa tel ince ses verir. Teldeki çentikler perde yerleri. Ses gerçekçi Karplus-Strong tel sesi (elektro ya da akustik).
   - Çalınca pembe-mavi parlayan dalga ve kıvılcımlar çıkar. Hazır arp, geri al, temizle; teller kaydedilir.
   - 5 adımlı öğretici ve rozetler (Gitarist, Slide ustası, Prodüktör…).
+- Kombo sayacı (GÜZEL! → SÜPER! → EFSANE!), seviye çubuğu, enerjiyle parlayan arka plan, titreşim.
+- Güvenilir çalma: parmak ucu telin bir yanından öbür yanına geçince çalar; yavaş, hızlı ve ileri-geri taramada her tel bir kez çalar, teldeki parmağın titremesi çalmaz.
 - **Pad:** havada parmak ucunla 16 pad'e vur (davul, akor, nota).
 - **Theremin:** açık elle havada dalga gibi ses; yukarı/aşağı ince/kalın, sağ/sol parlaklık.
 - 🔁 Döngü (looper): 4 vuruş sayar, 2 ölçü kaydeder, sürekli çalar, üstüne katman eklenir.
