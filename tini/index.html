@@ -49,7 +49,7 @@
   <div class="side left">
     <button class="rb" id="tHarp" data-for="strings"><i><svg><use href="#i-harp"/></svg></i><small>Hazır arp</small></button>
     <button class="rb" id="tClear" data-for="strings"><i><svg><use href="#i-trash"/></svg></i><small>Temizle</small></button>
-    <button class="rb" id="thTone" data-for="theremin" hidden><i><svg><use href="#i-tone"/></svg></i><small>Klasik</small></button>
+    <button class="rb" id="thTone" data-for="theremin" hidden><i><svg><use href="#i-tone"/></svg></i><small>Sakin</small></button>
     <button class="rb" id="droneBtn" data-for="theremin" hidden><i><svg><use href="#i-drone"/></svg></i><small>Dem</small></button>
   </div>
   <button id="rec" aria-label="Video kaydı"><span></span></button>
@@ -85,7 +85,7 @@
     <label class="row">Gam <select id="scaleSel"></select></label>
     <label class="row">Tel sesi <select id="toneSel"><option value="elektro">Elektrik gitar</option><option value="akustik">Akustik gitar</option></select></label>
     <div class="row">Telleri gama oturt <button class="tog" id="strQuantTog" aria-label="Telleri gama oturt"></button></div>
-    <div class="row">Theremin'i gama oturt <button class="tog" id="quantTog" aria-label="Theremin'i gama oturt"></button></div>
+    <div class="row"><span>El hareketiyle ses bük<small class="sub">Theremin'de çalarken eli yukarı aşağı oynatınca</small></span><button class="tog" id="bendTog" aria-label="El hareketiyle ses bük"></button></div>
     <div class="group">Ses</div>
     <label class="row">Yankı <input type="range" id="rev" min="0" max="1" step="0.01"></label>
     <label class="row">Ses düzeyi <input type="range" id="vol" min="0" max="1" step="0.01"></label>
@@ -93,6 +93,13 @@
     <div class="group">Kamera</div>
     <div class="row">Kamera <button id="flipBtn" class="ghost">Ön / arka</button></div>
     <div class="row">Görüntüyü göster <button class="tog" id="videoTog" aria-label="Görüntüyü göster"></button></div>
+  </div>
+</section>
+
+<section class="layer" id="tones" hidden>
+  <div class="card">
+    <div class="card-head"><h2>Ses</h2><button class="ic" data-close="tones" aria-label="Kapat"><svg><use href="#i-x"/></svg></button></div>
+    <ul id="toneList" class="songlist tonelist"></ul>
   </div>
 </section>
 
