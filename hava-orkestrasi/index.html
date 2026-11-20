@@ -35,8 +35,14 @@ button.on{background:linear-gradient(135deg,var(--acc),#8b5cff);border-color:tra
 [hidden]{display:none!important}
 #rec.live{background:#ff3b5c;border-color:transparent;color:#fff;animation:pulse 1s infinite}
 @keyframes pulse{50%{box-shadow:0 0 0 8px #ff3b5c33}}
-#status{position:fixed;left:50%;transform:translateX(-50%);top:calc(env(safe-area-inset-top) + 64px);background:#000a;border:1px solid var(--line);padding:7px 14px;border-radius:20px;font-size:12px;color:var(--mut);z-index:4;pointer-events:none;white-space:nowrap;max-width:94vw;overflow:hidden;text-overflow:ellipsis}
+#status{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom) + 110px);background:#000a;border:1px solid var(--line);padding:7px 14px;border-radius:20px;font-size:12px;color:var(--mut);z-index:4;pointer-events:none;white-space:nowrap;max-width:94vw;overflow:hidden;text-overflow:ellipsis}
 #status:empty{display:none}
+#tut{position:fixed;left:50%;transform:translateX(-50%);top:calc(env(safe-area-inset-top) + 62px);width:min(560px,calc(100% - 24px));background:#120f22ee;border:1px solid #ff4fd855;border-radius:18px;padding:10px 12px;display:flex;align-items:center;gap:10px;z-index:6;font-size:14px;line-height:1.35;box-shadow:0 8px 30px #0008}
+#tut b{color:#ffd1f4}#tutTxt{flex:1}
+#tutDots{display:flex;flex-direction:column;gap:4px}#tutDots i{width:7px;height:7px;border-radius:50%;background:#ffffff30}#tutDots i.ok{background:var(--ok)}#tutDots i.cur{background:var(--acc);box-shadow:0 0 8px var(--acc)}
+#tutSkip{padding:6px 10px;font-size:12px;color:var(--mut)}
+#toast{position:fixed;left:50%;top:calc(env(safe-area-inset-top) + 150px);transform:translate(-50%,-20px) scale(.9);opacity:0;pointer-events:none;background:linear-gradient(135deg,#2a1840f0,#15223cf0);border:1px solid #ffffff30;border-radius:18px;padding:12px 18px;display:flex;gap:12px;align-items:center;z-index:7;transition:.35s cubic-bezier(.2,1.4,.4,1);max-width:90vw}
+#toast.show{opacity:1;transform:translate(-50%,0) scale(1)}#toast span{font-size:30px}#toast b{display:block;font-size:15px}#toast small{color:var(--mut);font-size:12px}
 .layer{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#05040bcc;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);z-index:10;padding:16px}
 .layer[hidden]{display:none}
 .card{width:100%;max-width:460px;max-height:calc(100% - 20px);overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:24px;padding:22px}
@@ -67,7 +73,8 @@ a.big{display:block;text-align:center;text-decoration:none;font-weight:700}
  #bottom{gap:6px}
  #bottom button{padding:9px 10px;font-size:12px}
  .lbl{display:none}
- #status{top:calc(env(safe-area-inset-top) + 58px)}
+ #tut{top:calc(env(safe-area-inset-top) + 100px);font-size:13px}
+ #toast{top:calc(env(safe-area-inset-top) + 190px)}
 }
 </style>
 </head>
@@ -78,14 +85,16 @@ a.big{display:block;text-align:center;text-decoration:none;font-weight:700}
 <div id="top">
   <div class="brand">HAVA <span>ORKESTRASI</span></div>
   <div class="seg" id="modes">
-    <button data-mode="chord">🎹 Akor</button>
     <button data-mode="strings">🎸 Teller</button>
+    <button data-mode="chord">🎹 Akor</button>
     <button data-mode="pads">🥁 Pad</button>
     <button data-mode="theremin">🌊 Theremin</button>
   </div>
   <button id="helpBtn" aria-label="Nasıl çalınır">?</button>
 </div>
 <div id="status"></div>
+<div id="tut" hidden><div id="tutDots"></div><div id="tutTxt"></div><button id="tutSkip">Geç</button></div>
+<div id="toast"></div>
 <div id="bottom">
   <button id="beatBtn">🥁 Ritim</button>
   <button id="arpBtn">✨ Arpej</button>
@@ -102,9 +111,9 @@ a.big{display:block;text-align:center;text-decoration:none;font-weight:700}
 
 <div class="layer" id="intro">
   <div class="card">
-    <div class="emoji">🖐️🎶🤚</div>
+    <div class="emoji">👌〰️🎸</div>
     <h1>Hava Orkestrası</h1>
-    <p>Kameraya ellerini göster, havada müzik yap. Parmaklarını başparmağına değdirerek akor ve nota çal, pad'lere dokunarak davul çal ya da elini dalga gibi gezdirerek theremin çal.</p>
+    <p><b>Parmaklarınla havada ışıktan teller ger, üzerinden geçerek çal.</b> Gerdikçe ses incelir, perde basınca ses kayar. Ayrıca akor, havada davul ve theremin modları da var.</p>
     <p>📱 iPhone'da ses gelmezse yandaki <b>sessiz modu</b> kapat.</p><p>Kamera görüntüsü <b>cihazından hiç çıkmaz</b>. El takibi tarayıcının içinde yapılır.</p>
     <button class="big" id="startBtn">Kamerayı aç ve başla ▶</button>
     <button class="ghost" id="noCamBtn">Kamerasız dene (dokunarak)</button>
@@ -131,6 +140,8 @@ a.big{display:block;text-align:center;text-decoration:none;font-weight:700}
     <div class="row">Tempo <span id="bpmVal" style="min-width:56px;text-align:right"></span><input type="range" id="bpm" min="60" max="160" step="1"></div>
     <div class="row">Yankı <input type="range" id="rev" min="0" max="1" step="0.01"></div>
     <div class="row">Ses seviyesi <input type="range" id="vol" min="0" max="1" step="0.01"></div>
+    <div class="row">Tel sesi <select id="toneSel"><option value="elektro">Elektro gitar</option><option value="akustik">Akustik gitar</option></select></div>
+    <div class="row">Teller notaya kilitlensin <button class="tog" id="strQuantTog" aria-label="Teller notaya kilitlensin"></button></div>
     <div class="row">Theremin'de notaya kilitle <button class="tog" id="quantTog" aria-label="Notaya kilitle"></button></div>
     <div class="row">Kamera <button id="flipBtn">🔄 Ön / arka</button></div>
     <div class="row">Kamera görüntüsünü göster <button class="tog" id="videoTog" aria-label="Kamera görüntüsü"></button></div>
@@ -180,10 +191,10 @@ const STYLES={
   hiphop:{ad:'Hip-Hop',k:'x.....x...x..x..',s:'....x.......x...',h:'x.x.x.x.x.x.x.x.'},
   reggaeton:{ad:'Reggaeton',k:'x...x...x...x...',s:'...x..x....x..x.',h:'..x...x...x...x.'},
 };
-const S={mode:'chord',key:0,scale:'major',inst:'synth',bpm:100,beat:false,style:'pop',arp:false,reverb:.35,quant:true,video:true,facing:'user',vol:.85};
+const S={mode:'strings',strQuant:true,strTone:'elektro',key:0,scale:'major',inst:'synth',bpm:100,beat:false,style:'pop',arp:false,reverb:.35,quant:true,video:true,facing:'user',vol:.85};
 try{Object.assign(S,JSON.parse(localStorage.getItem('havaOrkestrasi')||'{}'))}catch(e){}
 S.beat=false;S.arp=false;
-if(!SCALES[S.scale])S.scale='major';if(!INST[S.inst]||INST[S.inst].hide)S.inst='synth';if(!STYLES[S.style])S.style='pop';
+try{if(localStorage.getItem('havaV')!=='3'){S.mode='strings';localStorage.setItem('havaV','3')}}catch(e){}if(!SCALES[S.scale])S.scale='major';if(!['chord','strings','pads','theremin'].includes(S.mode))S.mode='strings';if(!INST[S.inst]||INST[S.inst].hide)S.inst='synth';if(!STYLES[S.style])S.style='pop';
 function save(){try{const {beat,arp,...rest}=S;localStorage.setItem('havaOrkestrasi',JSON.stringify(rest))}catch(e){}}
 
 const mtof=m=>440*Math.pow(2,(m-69)/12);
@@ -200,7 +211,7 @@ function rebuild(){buildChords();ZN=scaleNotes(Z+3,60+S.key)}
 rebuild();
 
 /* ---------- ses motoru ---------- */
-let ac=null,bus,comp,master,revSend,delayNode,drumBus,recDest=null,analyser,noiseBuf,waveData;
+let ac=null,elecIn,bus,comp,master,revSend,delayNode,drumBus,recDest=null,analyser,noiseBuf,waveData;
 function initAudio(){
   if(ac){if(ac.state!=='running')ac.resume();return}
   const AC=window.AudioContext||window.webkitAudioContext;
@@ -216,6 +227,8 @@ function initAudio(){
   delayNode=ac.createDelay(2);const fb=ac.createGain(),dg=ac.createGain();delayNode.delayTime.value=60/S.bpm*.75;fb.gain.value=.28;dg.gain.value=.16;
   bus.connect(delayNode);delayNode.connect(fb);fb.connect(delayNode);delayNode.connect(dg);dg.connect(comp);
   drumBus=ac.createGain();drumBus.gain.value=.9;drumBus.connect(comp);
+  elecIn=ac.createWaveShaper();const cv2=new Float32Array(1024);for(let i=0;i<1024;i++){const x=i/511.5-1;cv2[i]=Math.tanh(2.6*x)/Math.tanh(2.6)}elecIn.curve=cv2;elecIn.oversample='2x';
+  const eLP=ac.createBiquadFilter();eLP.type='lowpass';eLP.frequency.value=5200;const eG=ac.createGain();eG.gain.value=.75;elecIn.connect(eLP);eLP.connect(eG);eG.connect(bus);
   const dRev=ac.createGain();dRev.gain.value=.12;drumBus.connect(dRev);dRev.connect(conv);
   noiseBuf=ac.createBuffer(1,ac.sampleRate,ac.sampleRate);const nd=noiseBuf.getChannelData(0);for(let i=0;i<nd.length;i++)nd[i]=Math.random()*2-1;
   if(ac.state!=='running')ac.resume();
@@ -252,16 +265,16 @@ function voice(midi,vel=.8,instName=S.inst,when=0,dur=0){
   else if(!I.s)setTimeout(()=>v.stop(.3),(t-ac.currentTime+I.a+I.d*3)*1000);
   return v;
 }
-function tap(midi,vel=.8,inst=S.inst,hold=.35,when=0){const d=inst==='pad'?.9:hold;rec('tap',[midi,vel,inst,d],when||undefined);return voice(midi,vel,inst,when,d)}
-/* gerçekçi tel sesi: Karplus-Strong */
+function tap(midi,vel=.8,inst=S.inst,hold=.35,when=0){const d=inst==='pad'?.9:hold;counted();rec('tap',[midi,vel,inst,d],when||undefined);return voice(midi,vel,inst,when,d)}
+/* gerçekçi tel sesi: Karplus-Strong (akustik / elektro) */
 const ksCache=new Map();
-function ksBuffer(midi){if(ksCache.has(midi))return ksCache.get(midi);const sr=ac.sampleRate,N=Math.max(2,Math.round(sr/mtof(midi))),len=Math.floor(sr*Math.max(1.2,Math.min(4,1.5+(72-midi)/16)));
-  const buf=ac.createBuffer(1,len,sr),d=buf.getChannelData(0),ring=new Float32Array(N);let lp=0;for(let i=0;i<N;i++){lp=lp*.4+(Math.random()*2-1)*.6;ring[i]=lp}
-  let idx=0;for(let i=0;i<len;i++){const nx=(idx+1)%N,v=ring[idx];d[i]=v;ring[idx]=.998*.5*(v+ring[nx]);idx=nx}
-  const fade=Math.min(len,sr*.05|0);for(let i=0;i<fade;i++)d[len-1-i]*=i/fade;ksCache.set(midi,buf);return buf}
-function ks(midi,vel=.8,when=0,sid=null){if(!ac)return;const t=Math.max(when,ac.currentTime);const s=ac.createBufferSource();s.buffer=ksBuffer(midi);
+function ksBuffer(midi,tone){const key=tone+midi;if(ksCache.has(key))return ksCache.get(key);const el=tone==='elektro',sr=ac.sampleRate,N=Math.max(2,Math.round(sr/mtof(midi))),len=Math.floor(sr*Math.max(1.4,Math.min(el?5:4,(el?2.4:1.5)+(72-midi)/16)));
+  const buf=ac.createBuffer(1,len,sr),d=buf.getChannelData(0),ring=new Float32Array(N);let lp=0;for(let i=0;i<N;i++){lp=lp*(el?.25:.4)+(Math.random()*2-1)*(el?.75:.6);ring[i]=lp}
+  const dec=el?.9993:.998;let idx=0;for(let i=0;i<len;i++){const nx=(idx+1)%N,v=ring[idx];d[i]=v;ring[idx]=dec*.5*(v+ring[nx]);idx=nx}
+  const fade=Math.min(len,sr*.08|0);for(let i=0;i<fade;i++)d[len-1-i]*=i/fade;ksCache.set(key,buf);return buf}
+function ks(midi,vel=.8,when=0,sid=null){if(!ac)return null;const t=Math.max(when,ac.currentTime),tone=S.strTone,base=Math.round(midi);const s=ac.createBufferSource();s.buffer=ksBuffer(base,tone);s.playbackRate.value=Math.pow(2,(midi-base)/12);
   const f=ac.createBiquadFilter();f.type='lowpass';f.frequency.value=1400+vel*7000;const body=ac.createBiquadFilter();body.type='peaking';body.frequency.value=220;body.Q.value=1.2;body.gain.value=4;
-  const g=ac.createGain();g.gain.value=.34*(.35+vel*.65);s.connect(f);f.connect(body);body.connect(g);g.connect(bus);s.start(t);s.onended=()=>{try{g.disconnect()}catch(e){}};rec('ks',[midi,vel,sid],t)}
+  const g=ac.createGain();g.gain.value=(tone==='elektro'?.3:.34)*(.35+vel*.65);s.connect(f);f.connect(body);body.connect(g);g.connect(tone==='elektro'?elecIn:bus);s.start(t);s.onended=()=>{try{g.disconnect()}catch(e){}};rec('ks',[midi,vel,sid],t);counted();return{src:s,base}}
 
 /* ---------- döngü kaydı (looper) ---------- */
 const LOOP={state:'off',start:0,len:0,ev:[],schedT:0};let noRec=false;
@@ -271,7 +284,7 @@ function heldEnd(h){if(!h||!ac)return;const d=Math.max(.06,ac.currentTime-h.t0);
 function playEv(e,t){noRec=true;try{if(e.type==='drum')drum(e.args[0],e.args[1],t);else if(e.type==='tap')voice(e.args[0],e.args[1],e.args[2],t,e.args[3]);else if(e.type==='ks'){ks(e.args[0],e.args[1],t);const id=e.args[2];if(id!=null)setTimeout(()=>{const s=strings.find(s=>s.id===id);if(s)s.amp=Math.max(s.amp,9)},Math.max(0,(t-ac.currentTime)*1000))}}finally{noRec=false}}
 function loopSched(from,to){const k0=Math.max(0,Math.floor((from-LOOP.start)/LOOP.len)),k1=Math.floor((to-LOOP.start)/LOOP.len);for(let k=k0;k<=k1;k++)for(const e of LOOP.ev){if(k<=e.cyc)continue;const t=LOOP.start+k*LOOP.len+e.off;if(t>=from&&t<to)playEv(e,t)}}
 function click(t,acc){const o=ac.createOscillator(),g=ac.createGain();o.frequency.value=acc?1760:1100;g.gain.setValueAtTime(.18,t);g.gain.exponentialRampToValueAtTime(.001,t+.05);o.connect(g);g.connect(comp);o.start(t);o.stop(t+.06)}
-function loopUI(){const b=$('#loopBtn'),st=LOOP.state;b.className=st==='off'?'':st;b.textContent={off:'🔁 Döngü',count:'⏳ Hazır…',rec:'● Kayıt',play:'▶ Döngü',dub:'● Ekle'}[st];$('#loopClr').hidden=st==='off'}
+function loopUI(){const b=$('#loopBtn'),st=LOOP.state;if(st==='play')ach('loop');b.className=st==='off'?'':st;b.textContent={off:'🔁 Döngü',count:'⏳ Hazır…',rec:'● Kayıt',play:'▶ Döngü',dub:'● Ekle'}[st];$('#loopClr').hidden=st==='off'}
 function loopPress(){initAudio();const st=LOOP.state;
   if(st==='off'){const bar=4*60/S.bpm;LOOP.len=2*bar;const t0=ac.currentTime+.1;LOOP.start=t0+bar;LOOP.schedT=LOOP.start;LOOP.ev=[];LOOP.state='count';nextT=t0;step=0;status('4 vuruş say, sonra 2 ölçü çal — döngü kaydediliyor');setTimeout(()=>status(''),4000)}
   else if(st==='play')LOOP.state='dub';else if(st==='dub')LOOP.state='play';else if(st==='count')LOOP.state='off';
@@ -287,7 +300,7 @@ function drum(type,vel=1,when=0){
   else if(type==='clap'){[0,.011,.022].forEach((d,i)=>noise(t+d,i===2?.2:.025,'bandpass',1500,vel*.55,g))}
   else if(type==='tom'){const o=ac.createOscillator();o.type='sine';o.frequency.setValueAtTime(220,t);o.frequency.exponentialRampToValueAtTime(110,t+.25);g.gain.setValueAtTime(vel*.8,t);g.gain.exponentialRampToValueAtTime(.001,t+.35);o.connect(g);o.start(t);o.stop(t+.4)}
   setTimeout(()=>{try{g.disconnect()}catch(e){}},(t-ac.currentTime)*1000+1200);
-  rec('drum',[type,vel],t);
+  rec('drum',[type,vel],t);counted();
 }
 
 /* ---------- sıralayıcı: ritim + arpej ---------- */
@@ -310,11 +323,11 @@ setInterval(()=>{if(!ac)return;const now=ac.currentTime;
 /* ---------- çalma mantığı ---------- */
 let curChord=null,chordIdx=-1,chordVoices=[];
 const parts=[];
-function burst(x,y,hue,n=18,pw=1){for(let i=0;i<n;i++){const a=Math.random()*Math.PI*2,s=(1+Math.random()*4)*pw;parts.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:1,hue,size:2+Math.random()*4})}parts.push({ring:1,x,y,life:1,hue,r:10})}
+function burst(x,y,hue,n=18,pw=1,ring=true){for(let i=0;i<n;i++){const a=Math.random()*Math.PI*2,s=(1+Math.random()*4)*pw;parts.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:1,hue,size:2+Math.random()*4})}if(ring)parts.push({ring:1,x,y,life:1,hue,r:10})}
 const HUE=m=>((m%12)*30+300)%360;
 
 function chordOn(i,x,y){
-  if(chordIdx===i)return;chordOff();const c=CH[i];if(!c||!ac)return;chordIdx=i;curChord=c;
+  if(chordIdx===i)return;chordOff();const c=CH[i];if(!c||!ac)return;chordIdx=i;curChord=c;counted();
   const list=[[c.root-12,.85,'bass']];
   if(!S.arp){const inst=S.inst==='synth'?'pad':S.inst;c.notes.forEach(n=>list.push([n,.5,inst]))}
   chordVoices=list.map(a=>voice(...a));chordHeld=held(list);
@@ -323,10 +336,10 @@ function chordOn(i,x,y){
 let chordHeld=null;
 function chordOff(){chordVoices.forEach(v=>v&&v.stop());chordVoices=[];heldEnd(chordHeld);chordHeld=null;chordIdx=-1;curChord=null}
 const mel={};
-function melOn(src,zone,harm,x,y){melOff(src);if(!ac)return;const m=ZN[zone];const list=[[m,.8,S.inst]];if(harm)list.push([ZN[zone+2],.6,S.inst]);mel[src]={vs:list.map(a=>voice(...a)),zone,harm,h:held(list)};if(x!=null)burst(x,y,HUE(m),16)}
+function melOn(src,zone,harm,x,y){melOff(src);if(!ac)return;counted();const m=ZN[zone];const list=[[m,.8,S.inst]];if(harm)list.push([ZN[zone+2],.6,S.inst]);mel[src]={vs:list.map(a=>voice(...a)),zone,harm,h:held(list)};if(x!=null)burst(x,y,HUE(m),16)}
 function melMove(src,zone,x,y){const s=mel[src];if(!s||s.zone===zone)return;melOn(src,zone,s.harm,x,y)}
 function melOff(src){const s=mel[src];if(!s)return;s.vs.forEach(v=>v&&v.stop());heldEnd(s.h);delete mel[src]}
-function releaseAll(){chordOff();Object.keys(mel).forEach(melOff);thereminOff();for(const r of['L','R'])pinchSt[r].fill(false);padInside.clear();strPinch.clear();slots=[]}
+function releaseAll(){chordOff();Object.keys(mel).forEach(melOff);thereminOff();for(const r of['L','R'])pinchSt[r].fill(false);padInside.clear();[...strPinch.keys()].forEach(holdEnd);slots=[]}
 
 /* ---------- yerleşim ---------- */
 const topY=()=>W<640?108:76, botY=()=>H-(W<640?118:84);
@@ -357,53 +370,107 @@ function thereminUpdate(src,lvl){
 }
 function thereminOff(){if(thV){thV.stop();thV=null}thInfo=null}
 
-/* ---------- teller: çimdikle-çek-bırak = tel, üzerinden geç = çal ---------- */
+/* ---------- teller: çimdikle-ger-bırak, üzerinden geç = çal, üstüne bas = perde ---------- */
 let strings=[],sidN=1;const strPinch=new Map();const MAXS=18,LMIN=50;
 const lmax=()=>Math.max(320,Math.hypot(W,H)*.75);
-function strNote(L){const Lx=lmax(),x=Math.log(Lx/Math.max(LMIN,Math.min(Lx,L)))/Math.log(Lx/LMIN);const m=40+S.key+x*36;const all=scaleNotes(42,24+S.key);return all.reduce((a,n)=>Math.abs(n-m)<Math.abs(a-m)?n:a,all[0])}
+function pitchRaw(L){const Lx=lmax(),x=Math.log(Lx/Math.max(LMIN*.4,Math.min(Lx,L)))/Math.log(Lx/LMIN);return 40+S.key+x*36}
+function snap(m){const all=scaleNotes(52,24+S.key);return all.reduce((a,n)=>Math.abs(n-m)<Math.abs(a-m)?n:a,all[0])}
+function strNote(L){const m=pitchRaw(L);return S.strQuant?snap(m):m}
 function lenFor(m){const Lx=lmax();return Lx*Math.pow(Lx/LMIN,-(m-40-S.key)/36)}
-function mkString(a,b){return{id:sidN++,a:{x:a.x,y:a.y},b:{x:b.x,y:b.y},midi:strNote(dist(a,b)),amp:0,v:.5,last:0}}
+function mkString(a,b){return{id:sidN++,a:{x:a.x,y:a.y},b:{x:b.x,y:b.y},midi:strNote(dist(a,b)),amp:0,v:.5,last:0,fret:null,fc:null,ring:null,hold:{a:null,b:null}}}
 function retune(){strings.forEach(s=>s.midi=strNote(dist(s.a,s.b)))}
-function saveStrings(){try{localStorage.setItem('havaTeller',JSON.stringify(strings.map(s=>[s.a.x/W,s.a.y/H,s.b.x/W,s.b.y/H])))}catch(e){}}
+function saveStrings(){try{localStorage.setItem('havaTeller',JSON.stringify(strings.filter(s=>dist(s.a,s.b)>=LMIN).map(s=>[s.a.x/W,s.a.y/H,s.b.x/W,s.b.y/H])))}catch(e){}}
 function loadStrings(){try{strings=JSON.parse(localStorage.getItem('havaTeller')||'[]').map(a=>mkString({x:a[0]*W,y:a[1]*H},{x:a[2]*W,y:a[3]*H}))}catch(e){strings=[]}}
-function addString(a,b){if(dist(a,b)<LMIN)return null;const s=mkString(a,b);strings.push(s);if(strings.length>MAXS)strings.shift();s.amp=10;ks(s.midi,.7,0,s.id);burst((a.x+b.x)/2,(a.y+b.y)/2,HUE(s.midi),18);saveStrings();return s}
-function harpPreset(){const t=topY()+20,b=botY()-20,avail=b-t;const lo=strNote(avail*.98);const all=scaleNotes(42,24+S.key);let i=all.findIndex(n=>n>=lo);const n=W<640?7:10;const notes=all.slice(i,i+n);
+function proj(s,p){const dx=s.b.x-s.a.x,dy=s.b.y-s.a.y,L2=dx*dx+dy*dy||1,L=Math.sqrt(L2);return{u:((p.x-s.a.x)*dx+(p.y-s.a.y)*dy)/L2,d:((p.x-s.a.x)*dy-(p.y-s.a.y)*dx)/L}}
+function segLen(s,v){const L=dist(s.a,s.b);if(!s.fret)return L;const u=s.fret.u;return v>u?(1-u)*L:u*L}
+function pitchAt(s,v){return strNote(segLen(s,v))}
+function pluckString(s,v,vel,t){const m=pitchAt(s,v);const r=ks(m,vel,t,s.id);if(r)s.ring={src:r.src,base:r.base,v,m,m0:m,until:performance.now()+3000};s.v=Math.max(.12,Math.min(.88,v));s.amp=6+10*vel;
+  if(s.fret)tutEvent('fret');tutEvent('pluck')}
+function bendRings(){if(!ac)return;const now=performance.now();for(const s of strings){const r=s.ring;if(!r)continue;if(now>r.until){s.ring=null;continue}
+  const m=pitchAt(s,r.v);if(Math.abs(m-r.m)>.01){r.m=m;try{r.src.playbackRate.setTargetAtTime(Math.pow(2,(m-r.base)/12),ac.currentTime,.012)}catch(e){}s.amp=Math.max(s.amp,4);
+    const bent=Math.abs(m-r.m0);if(bent>=1)tutEvent('bend');if(bent>=4)ach('slide')}}}
+function harpPreset(){const t=topY()+20+(tut<TUT.length?(W<640?75:45):0),b=botY()-20,avail=b-t;const lo=snap(pitchRaw(avail*.98));const all=scaleNotes(52,24+S.key);let i=all.findIndex(n=>n>=lo);const n=W<640?7:10;const notes=all.slice(i,i+n);
   strings=[];const x0=W*.14,x1=W*.86;notes.forEach((m,k)=>{const L=Math.min(avail,lenFor(m)),x=x0+(x1-x0)*k/(n-1),cy=(t+b)/2;strings.push(mkString({x,y:cy-L/2},{x,y:cy+L/2}))});retune();saveStrings();
   strings.forEach((s,k)=>setTimeout(()=>{if(ac){s.amp=8;ks(s.midi,.5,0,null)}},k*55))}
 function segHit(p1,p2,p3,p4){const d=(p2.x-p1.x)*(p4.y-p3.y)-(p2.y-p1.y)*(p4.x-p3.x);if(Math.abs(d)<1e-9)return null;const u=((p3.x-p1.x)*(p4.y-p3.y)-(p3.y-p1.y)*(p4.x-p3.x))/d,v=((p3.x-p1.x)*(p2.y-p1.y)-(p3.y-p1.y)*(p2.x-p1.x))/d;return u>=0&&u<=1&&v>=0&&v<=1?{u,v}:null}
-function strum(p0,p1,vel){if(!ac||!strings.length)return;const hits=[];for(const s of strings){const h=segHit(p0,p1,s.a,s.b);if(h)hits.push([h,s])}hits.sort((a,b)=>a[0].u-b[0].u);const now=performance.now();let k=0;
-  for(const[h,s]of hits){if(now-s.last<90)continue;s.last=now;s.v=Math.max(.15,Math.min(.85,h.v));const ve=Math.max(.3,Math.min(1,vel));s.amp=6+10*ve;ks(s.midi,ve,ac.currentTime+k*.012,s.id);k++;burst(p0.x+(p1.x-p0.x)*h.u,p0.y+(p1.y-p0.y)*h.u,HUE(s.midi),8,.7)}}
-function grabAt(p,r){for(const s of strings)for(const e of['a','b'])if(dist(s[e],p)<r)return{s,e};return null}
-function pinchStart(src,p,r){strPinch.set(src,{a:{...p},cur:{...p},grab:grabAt(p,r)})}
-function pinchMove(src,p){const st=strPinch.get(src);if(!st)return;st.cur={...p};if(st.grab){const{s,e}=st.grab;s[e]={...p};const m=strNote(dist(s.a,s.b));if(m!==s.midi){s.midi=m;s.amp=4;ks(m,.35,0,null)}}}
-function pinchEnd(src){const st=strPinch.get(src);if(!st)return;strPinch.delete(src);
-  if(st.grab){const{s}=st.grab;if(dist(s.a,s.b)<LMIN*.7){strings=strings.filter(x=>x!==s);burst(s.a.x,s.a.y,0,20);status('Tel silindi');setTimeout(()=>status(''),1200)}else{s.amp=8;ks(s.midi,.6,0,s.id)}saveStrings()}
-  else addString(st.a,st.cur)}
+function strum(p0,p1,vel,key){if(!ac||!strings.length)return;const hits=[];for(const s of strings){if(dist(s.a,s.b)<LMIN||(s.fret&&s.fret.k===key))continue;const h=segHit(p0,p1,s.a,s.b);if(h)hits.push([h,s])}hits.sort((a,b)=>a[0].u-b[0].u);const now=performance.now();let k=0;
+  for(const[h,s]of hits){if(now-s.last<90)continue;s.last=now;const ve=Math.max(.3,Math.min(1,vel));pluckString(s,h.v,ve,ac.currentTime+k*.014);k++;burst(p0.x+(p1.x-p0.x)*h.u,p0.y+(p1.y-p0.y)*h.u,40+Math.random()*25,7,.55,false)}
+  if(k){for(const[,s2]of hits)recentPl.push({t:now,id:s2.id});recentPl=recentPl.filter(r=>now-r.t<450);const n=new Set(recentPl.map(r=>r.id)).size;if(n>=3)tutEvent('strum3');if(n>=5)ach('strum5')}}
+let recentPl=[];
+function grabAt(p,r){let best=null,bd=r;for(const s of strings)for(const e of['a','b']){if(s.hold[e])continue;const d=dist(s[e],p);if(d<bd){bd=d;best={s,e}}}return best}
+function nearString(p,r){let best=null,bd=r;for(const s of strings){if(dist(s.a,s.b)<LMIN)continue;const q=proj(s,p);if(q.u>.04&&q.u<.96&&Math.abs(q.d)<bd){bd=Math.abs(q.d);best={s,u:q.u}}}return best}
+function holdStart(src,p,r){const g=r?grabAt(p,r):null;
+  if(g){g.s.hold[g.e]=src;strPinch.set(src,{s:g.s,e:g.e,isNew:false})}
+  else{const s=mkString(p,p);s.hold.b=src;strings.push(s);if(strings.length>MAXS){const i=strings.findIndex(x=>!x.hold.a&&!x.hold.b);if(i>=0)strings.splice(i,1)}strPinch.set(src,{s,e:'b',isNew:true})}}
+function holdMove(src,p){const st=strPinch.get(src);if(!st)return;const s=st.s;s[st.e]={x:p.x,y:p.y};const L=dist(s.a,s.b);if(L<LMIN)return;const m=strNote(L);
+  if(S.strQuant&&m!==s.midi&&!s.ring&&ac){ks(m,.22,0,null);s.amp=Math.max(s.amp,3)}s.midi=m}
+function holdEnd(src){const st=strPinch.get(src);if(!st)return;strPinch.delete(src);const s=st.s;s.hold[st.e]=null;if(s.hold.a||s.hold.b)return;
+  if(dist(s.a,s.b)<LMIN*.7){strings=strings.filter(x=>x!==s);if(!st.isNew){burst(s.a.x,s.a.y,0,20);status('Tel silindi');setTimeout(()=>status(''),1200)}}
+  else{if(st.isNew){pluckString(s,.5,.7);burst((s.a.x+s.b.x)/2,(s.a.y+s.b.y)/2,HUE(Math.round(s.midi)),22);tutEvent('make')}saveStrings()}}
+function updateFrets(tips){
+  for(const s of strings){if(s.fret&&s.fret.k[0]==='p')continue;if(dist(s.a,s.b)<LMIN){s.fret=null;continue}
+    let best=null,bd=1e9;for(const t of tips){const q=proj(s,t.p),r=Math.max(12,t.size*.16);if(q.u>.04&&q.u<.96&&Math.abs(q.d)<r&&Math.abs(q.d)<bd){bd=Math.abs(q.d);best={k:t.k,u:q.u}}}
+    if(!best){s.fc=null;s.fret=null;continue}
+    if(s.fc&&s.fc.k===best.k)s.fc.n++;else s.fc={k:best.k,n:1};
+    if(s.fc.n>=2)s.fret=s.fret&&s.fret.k===best.k?{k:best.k,u:s.fret.u+(best.u-s.fret.u)*.6}:best}}
 function stringHands(){
   for(const role of['L','R']){const h=hands.find(h=>h.role===role),act=strPinch.has(role);
-    let on=false;if(h){const mn=Math.min(...h.pr);on=act?h.pr[0]<.5:(h.pr[0]<.3&&h.pr[0]===mn)}
+    let on=false;if(h){const mn=Math.min(...h.pr);on=act?h.pr[0]<.5:(h.pr[0]<.3&&h.pr[0]===mn&&h.ext[0]>EXT)}
     const p=h?{x:(h.pts[4].x+h.pts[8].x)/2,y:(h.pts[4].y+h.pts[8].y)/2}:null;
-    if(on&&!act)pinchStart(role,p,Math.max(30,h.size*.4));else if(on)pinchMove(role,p);else if(act)pinchEnd(role)}
+    if(on&&!act)holdStart(role,p,Math.max(30,h.size*.45));else if(on)holdMove(role,p);else if(act)holdEnd(role)}
+  const tips=[];for(const h of hands){if(strPinch.has(h.role))continue;for(const t of[8,12])tips.push({k:'s'+h.role+t,p:h.pts[t],size:h.size})}
+  updateFrets(tips);
   const seen=new Set();
-  for(const h of hands){if(strPinch.has(h.role))continue;for(const t of[8,12]){const k='s'+h.role+t,p=h.pts[t],pp=tipPrev[k];seen.add(k);tipPrev[k]=p;if(pp){const d=dist(pp,p);if(d>1&&d<W*.45)strum(pp,p,.25+d/h.size*1.3)}}}
+  for(const t of tips){const pp=tipPrev[t.k];seen.add(t.k);tipPrev[t.k]=t.p;if(!pp)continue;const d=dist(pp,t.p);if(d>Math.max(4,t.size*.07)&&d<W*.45)strum(pp,t.p,.25+d/t.size*1.3,t.k)}
   for(const k of Object.keys(tipPrev))if(k[0]==='s'&&!seen.has(k))delete tipPrev[k];
 }
+const SG=['#ff6ad5','#c58bff','#6ff3ff'];
 function drawStrings(){
-  const tt=performance.now()/1000;
-  for(const s of strings){const hue=HUE(s.midi),dx=s.b.x-s.a.x,dy=s.b.y-s.a.y,L=Math.hypot(dx,dy)||1,nx=-dy/L,ny=dx/L;const w=Math.max(1.5,Math.min(5,1.5+(76-s.midi)/10));
-    ctx.save();ctx.lineCap='round';ctx.strokeStyle=`hsl(${hue},95%,${62+s.amp*1.5}%)`;ctx.shadowColor=`hsl(${hue},100%,60%)`;ctx.shadowBlur=8+s.amp*2;ctx.lineWidth=w;
-    const px=s.a.x+dx*s.v,py=s.a.y+dy*s.v;
-    if(s.amp>.4){for(const sg of[1,-1]){const o=sg*s.amp*Math.abs(Math.sin(tt*45+s.id))*2;ctx.globalAlpha=.75;ctx.beginPath();ctx.moveTo(s.a.x,s.a.y);ctx.quadraticCurveTo(px+nx*o,py+ny*o,s.b.x,s.b.y);ctx.stroke()}}
-    else{ctx.beginPath();ctx.moveTo(s.a.x,s.a.y);ctx.lineTo(s.b.x,s.b.y);ctx.stroke()}
-    ctx.globalAlpha=1;ctx.shadowBlur=0;ctx.fillStyle='#fff';for(const e of[s.a,s.b]){ctx.beginPath();ctx.arc(e.x,e.y,4.5,0,7);ctx.fill()}
-    ctx.fillStyle=`hsla(${hue},100%,80%,.85)`;ctx.font='700 11px system-ui';ctx.textAlign='center';ctx.fillText(nameOf(s.midi),(s.a.x+s.b.x)/2+nx*14,(s.a.y+s.b.y)/2+ny*14);ctx.restore();s.amp*=.95;if(s.amp<.05)s.amp=0}
-  for(const st of strPinch.values()){if(st.grab)continue;const L=dist(st.a,st.cur);ctx.save();ctx.setLineDash([6,6]);ctx.lineWidth=2;ctx.strokeStyle=L<LMIN?'#ffffff55':`hsl(${HUE(strNote(L))},100%,70%)`;ctx.beginPath();ctx.moveTo(st.a.x,st.a.y);ctx.lineTo(st.cur.x,st.cur.y);ctx.stroke();
-    if(L>=LMIN){ctx.fillStyle='#fff';ctx.font='900 22px system-ui';ctx.textAlign='center';ctx.fillText(nameOf(strNote(L)),st.cur.x,st.cur.y-18)}ctx.restore()}
-  if(!strings.length&&!strPinch.size){ctx.save();ctx.textAlign='center';ctx.fillStyle='#ffffffcc';ctx.font=`800 ${Math.min(22,W*.05)}px system-ui`;ctx.fillText('👌 Başparmak + işaret parmağını birleştir',W/2,H/2-30);ctx.fillText('çek ve bırak → tel oluşur',W/2,H/2);ctx.fillStyle='#ffffff88';ctx.font=`600 ${Math.min(15,W*.038)}px system-ui`;ctx.fillText('Sonra parmağını tellerin üzerinden geçir 🎸  ·  Uzun tel kalın, kısa tel ince ses',W/2,H/2+30);ctx.restore()}
+  const tt=performance.now()/1000;ctx.save();ctx.lineCap='round';ctx.lineJoin='round';
+  for(const s of strings){const L=dist(s.a,s.b);if(L<2)continue;const dx=(s.b.x-s.a.x)/L,dy=(s.b.y-s.a.y)/L,nx=-dy,ny=dx,on=L>=LMIN,held=s.hold.a||s.hold.b,hue=HUE(Math.round(s.midi));
+    // perde çizgileri (cetvel gibi)
+    if(on){ctx.strokeStyle='rgba(255,255,255,.5)';ctx.lineWidth=1;ctx.beginPath();const up=scaleNotes(52,24+S.key).filter(n=>n>s.midi+.01).slice(0,12);
+      for(const n of up){const Lk=lenFor(n);if(Lk>=L*.97||Lk<LMIN*.45)continue;const u=1-Lk/L,x=s.a.x+dx*L*u,y=s.a.y+dy*L*u;ctx.moveTo(x,y);ctx.lineTo(x+nx*7,y+ny*7)}ctx.stroke()}
+    const vib=s.amp,N=30,pts=[];
+    for(let i=0;i<=N;i++){const f=i/N;let g=f,lo=0,hi=1;if(s.fret){if(s.v>s.fret.u){lo=s.fret.u}else{hi=s.fret.u}}let o=0;
+      if(vib>.2&&f>=lo&&f<=hi){g=(f-lo)/(hi-lo||1);o=vib*(Math.sin(Math.PI*g)*Math.cos(tt*52+s.id)+.35*Math.sin(2*Math.PI*g)*Math.cos(tt*81+s.id)+.18*Math.sin(5*Math.PI*g+tt*30))}
+      pts.push([s.a.x+dx*L*f+nx*o,s.a.y+dy*L*f+ny*o])}
+    const path=()=>{ctx.beginPath();ctx.moveTo(pts[0][0],pts[0][1]);for(let i=1;i<pts.length;i++)ctx.lineTo(pts[i][0],pts[i][1])};
+    if(vib>.4){ctx.globalCompositeOperation='lighter';const gr=ctx.createLinearGradient(s.a.x,s.a.y,s.b.x,s.b.y);SG.forEach((c,i)=>gr.addColorStop(i/2,c));
+      path();ctx.strokeStyle=`hsla(${hue},100%,60%,${Math.min(.3,vib/40)})`;ctx.lineWidth=12;ctx.stroke();path();ctx.strokeStyle=gr;ctx.globalAlpha=Math.min(1,.35+vib/14);ctx.lineWidth=4;ctx.stroke();ctx.globalAlpha=1;
+      path();ctx.strokeStyle='#fff';ctx.lineWidth=1.6;ctx.stroke();ctx.globalCompositeOperation='source-over';
+      if(Math.random()<vib/22){const f=Math.random(),x=s.a.x+dx*L*f,y=s.a.y+dy*L*f;parts.push({x,y,vx:(Math.random()-.5)*1.6,vy:-Math.random()*1.8,life:1,hue:40+Math.random()*20,size:1.2+Math.random()*1.8})}}
+    else{path();ctx.strokeStyle=on?`hsla(${hue},90%,65%,.22)`:'rgba(255,255,255,.15)';ctx.lineWidth=7;ctx.stroke();ctx.setLineDash(on?[]:[5,6]);path();ctx.strokeStyle=on?'rgba(255,255,255,.92)':'rgba(255,255,255,.6)';ctx.lineWidth=2;ctx.stroke();ctx.setLineDash([])}
+    for(const e of['a','b']){const p=s[e];ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(p.x,p.y,s.hold[e]?6:4,0,7);ctx.fill();if(s.hold[e]){ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.beginPath();ctx.arc(p.x,p.y,11+Math.sin(tt*8)*2,0,7);ctx.stroke()}}
+    if(s.fret){const x=s.a.x+dx*L*s.fret.u,y=s.a.y+dy*L*s.fret.u;ctx.strokeStyle='#ffa53a';ctx.lineWidth=3;ctx.beginPath();ctx.arc(x,y,8,0,7);ctx.stroke();ctx.fillStyle='#ffa53a88';ctx.fill()}
+    if(on&&(held||vib>2)){const m=s.ring&&vib>1?s.ring.m:s.midi,hp=s.hold.b?s.b:s.hold.a?s.a:{x:(s.a.x+s.b.x)/2,y:(s.a.y+s.b.y)/2};ctx.fillStyle='#fff';ctx.font=`900 ${held?24:15}px system-ui`;ctx.textAlign='center';ctx.fillText(nameOf(m),hp.x+nx*26,hp.y+ny*26-(held?8:0))}
+    s.amp*=.955;if(s.amp<.05)s.amp=0}
+  ctx.restore();
+  if(!strings.length&&!strPinch.size&&tut>=TUT.length){ctx.save();ctx.textAlign='center';ctx.fillStyle='#ffffffcc';ctx.font=`800 ${Math.min(22,W*.05)}px system-ui`;ctx.fillText('👌 Başparmak + işaret parmağını birleştir',W/2,H/2-16);ctx.fillText('çekerek tel ger, sonra üzerinden geç',W/2,H/2+14);ctx.restore()}
 }
 
+/* ---------- öğretici + rozetler ---------- */
+const TUT=[
+  {id:'make',hand:'👌 Başparmak + işaret parmağını birleştir, <b>çekerek tel ger</b> ve bırak',touch:'Ekrana <b>basılı tut</b> (titreşince) ve parmağını çekerek <b>tel ger</b>'},
+  {id:'pluck',hand:'☝️ Öbür elinin işaret parmağını <b>telin üzerinden geçir</b>',touch:'Parmağını <b>telin üzerinden hızlıca kaydır</b>'},
+  {id:'strum3',hand:'🎸 2 tel daha ger, sonra <b>tek hareketle 3 teli birden</b> tara',touch:'2 tel daha ger, sonra <b>tek kaydırmayla 3 teli</b> tara'},
+  {id:'fret',hand:'🎚️ Bir parmağını <b>telin üstünde tut</b> (perde), öbür elinle çal: ses incelir',touch:'Bir parmağınla <b>telin üstüne bas</b>, diğer parmağınla çal'},
+  {id:'bend',hand:'〰️ Tel çalarken perde parmağını <b>tel boyunca kaydır</b> ya da ucundan tutup gerdir: ses kayar',touch:'Tel çalarken basan parmağını <b>tel boyunca kaydır</b>: ses kayar'},
+];
+let tut=0;try{tut=+(localStorage.getItem('havaTut')||0)}catch(e){}
+function renderTut(){const el=$('#tut');if(S.mode!=='strings'||tut>=TUT.length||!$('#intro').hidden){el.hidden=true;return}el.hidden=false;
+  $('#tutTxt').innerHTML=(camOn?TUT[tut].hand:TUT[tut].touch);$('#tutDots').innerHTML=TUT.map((_,i)=>`<i class="${i<tut?'ok':i===tut?'cur':''}"></i>`).join('')}
+function tutEvent(id){if(tut>=TUT.length||TUT[tut].id!==id)return;tut++;try{localStorage.setItem('havaTut',tut)}catch(e){}confetti();
+  if(tut>=TUT.length)toast('🎉','Tel ustası oldun!','Şimdi 🔁 Döngü ile kendi parçanı kaydet');else toast('✅','Harika!',`Adım ${tut}/${TUT.length} tamam`);renderTut()}
+const ACH={strum5:['🔥','Gitarist','5 teli tek hareketle taradın'],slide:['〰️','Slide ustası','Sesi 4 nota kaydırdın'],notes100:['💯','Yüz nota','100 nota çaldın'],loop:['🔁','Prodüktör','İlk döngünü kaydettin'],video:['🎬','Yıldız','İlk videonu çektin'],explorer:['🧭','Kaşif','Tüm modları denedin'],notes500:['🏆','Virtüöz','500 nota çaldın']};
+let achDone={};try{achDone=JSON.parse(localStorage.getItem('havaRozet')||'{}')}catch(e){}
+function ach(k){if(achDone[k]||!ACH[k])return;achDone[k]=1;try{localStorage.setItem('havaRozet',JSON.stringify(achDone))}catch(e){}const[a,b,c]=ACH[k];toast(a,'Rozet: '+b,c);confetti()}
+let noteCount=0;function counted(){if(noRec)return;noteCount++;if(noteCount===100)ach('notes100');if(noteCount===500)ach('notes500')}
+let toastT;function toast(icon,title,sub){const el=$('#toast');el.innerHTML=`<span>${icon}</span><div><b>${title}</b><small>${sub}</small></div>`;el.classList.remove('show');void el.offsetWidth;el.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>el.classList.remove('show'),2800)}
+function confetti(){for(let i=0;i<40;i++){const a=-Math.PI/2+(Math.random()-.5)*2.2,s=4+Math.random()*7;parts.push({x:W/2,y:H*.3,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:1.3,hue:Math.random()*360,size:2.5+Math.random()*3})}}
+
 /* ---------- el takibi ---------- */
-const TIPS=[8,12,16,20],FCOL=['#ff4fd8','#4fd1ff','#ffd84f','#7dff6b'],FNAME=['İşaret','Orta','Yüzük','Serçe'];
+const EXT=.9,TIPS=[8,12,16,20],FCOL=['#ff4fd8','#4fd1ff','#ffd84f','#7dff6b'],FNAME=['İşaret','Orta','Yüzük','Serçe'];
 const CON=[[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],[9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
 let hands=[];const pinchSt={L:[false,false,false,false],R:[false,false,false,false]};const thOpen={R:false};
 const padInside=new Map();const tipPrev={};
@@ -422,12 +489,12 @@ function processHands(lms){
   for(const r of fresh){if(!used.size&&fresh.length===1)r.role=S.mode==='theremin'?'R':(r.cx<W/2?'L':'R');else r.role=used.has('L')?'R':'L';used.add(r.role)}
   if(next.length===1&&S.mode!=='theremin'){const r=next[0];const busy=pinchSt[r.role].some(Boolean)||strPinch.has(r.role);if(!busy){if(r.role==='R'&&r.cx<W*.4)r.role='L';else if(r.role==='L'&&r.cx>W*.6)r.role='R'}}
   slots=next.map(r=>({pts:r.pts,role:r.role}));
-  for(const h of next){h.size=dist(h.pts[0],h.pts[9])||1;h.pr=TIPS.map(t=>dist(h.pts[4],h.pts[t])/h.size);h.open=TIPS.reduce((a,t)=>a+dist(h.pts[0],h.pts[t]),0)/4/h.size}
+  for(const h of next){h.size=dist(h.pts[0],h.pts[9])||1;h.pr=TIPS.map(t=>dist(h.pts[4],h.pts[t])/h.size);h.ext=TIPS.map(t=>dist(h.pts[0],h.pts[t])/h.size);h.open=TIPS.reduce((a,t)=>a+dist(h.pts[0],h.pts[t]),0)/4/h.size}
   hands=next;
   // parmak birleştirme
   for(const role of['L','R']){const h=hands.find(h=>h.role===role),st=pinchSt[role];let best=-1;
     if(h){let mn=9;h.pr.forEach((r,f)=>{if(r<mn){mn=r;best=f}})}
-    for(let f=0;f<4;f++){const on=!!h&&S.mode==='chord'&&(st[f]?h.pr[f]<.52:(f===best&&h.pr[f]<.33));
+    for(let f=0;f<4;f++){const on=!!h&&S.mode==='chord'&&(st[f]?h.pr[f]<.52:(f===best&&h.pr[f]<.33&&h.ext[f]>EXT));
       if(on!==st[f]){st[f]=on;const p=h?{x:(h.pts[4].x+h.pts[TIPS[f]].x)/2,y:(h.pts[4].y+h.pts[TIPS[f]].y)/2}:null;on?pinchDown(role,f,p):pinchUp(role,f)}}
     if(h&&S.mode==='chord'&&role==='R')for(const f of[0,1])if(st[f]){const p={x:(h.pts[4].x+h.pts[TIPS[f]].x)/2,y:(h.pts[4].y+h.pts[TIPS[f]].y)/2};melMove('R'+f,zoneOf(p.y),p.x,p.y)}}
   // pad'ler: parmak uçları pad'e girince çalar
@@ -454,14 +521,16 @@ const ptr=new Map();
 cv.addEventListener('pointerdown',e=>{initAudio();cv.setPointerCapture(e.pointerId);const p={x:e.clientX,y:e.clientY};ptr.set(e.pointerId,p);
   if(S.mode==='pads'){const i=padAt(p.x,p.y);if(i>=0)padHit(i,.7);padInside.set('p'+e.pointerId,i)}
   else if(S.mode==='chord'){if(p.x<W/2){p.chord=chordAt(p.y);chordOn(p.chord,p.x,p.y)}else melOn('p'+e.pointerId,zoneOf(p.y),false,p.x,p.y)}
-  else if(S.mode==='strings'){p.sx=p.x;p.sy=p.y;p.px=p.x;p.py=p.y;p.t0=performance.now();if(grabAt(p,28)){p.kind='grab';pinchStart('p'+e.pointerId,p,28)}else p.kind='pend'}});
+  else if(S.mode==='strings'){const id='p'+e.pointerId;p.sx=p.x;p.sy=p.y;p.px=p.x;p.py=p.y;p.t0=performance.now();let ns;
+    if(grabAt(p,28)){p.kind='grab';holdStart(id,p,28)}else if(ns=nearString(p,22)){p.kind='fret';p.fs=ns.s;ns.s.fret={k:id,u:ns.u}}else p.kind='pend'}});
 cv.addEventListener('pointermove',e=>{const p=ptr.get(e.pointerId);if(!p)return;p.x=e.clientX;p.y=e.clientY;
   if(S.mode==='pads'){const i=padAt(p.x,p.y),was=padInside.get('p'+e.pointerId);if(i>=0&&i!==was)padHit(i,.6);padInside.set('p'+e.pointerId,i)}
   else if(S.mode==='chord'){if(p.chord!=null){const c=chordAt(p.y);if(c!==p.chord){p.chord=c;chordOn(c,p.x,p.y)}}else melMove('p'+e.pointerId,zoneOf(p.y),p.x,p.y)}
   else if(S.mode==='strings'){const id='p'+e.pointerId;if(p.kind==='pend'&&Math.hypot(p.x-p.sx,p.y-p.sy)>12){p.kind='strum';p.px=p.sx;p.py=p.sy}
-    if(p.kind==='strum'){const d=Math.hypot(p.x-p.px,p.y-p.py);strum({x:p.px,y:p.py},p,.35+d/45)}else if(p.kind==='make'||p.kind==='grab')pinchMove(id,p);p.px=p.x;p.py=p.y}});
-function pointerFrame(){if(S.mode!=='strings')return;const now=performance.now();for(const[id,p]of ptr)if(p.kind==='pend'&&now-p.t0>260){p.kind='make';pinchStart('p'+id,{x:p.sx,y:p.sy},0);pinchMove('p'+id,p);if(navigator.vibrate)navigator.vibrate(15)}}
-function pUp(e){const p=ptr.get(e.pointerId);if(!p)return;ptr.delete(e.pointerId);padInside.delete('p'+e.pointerId);if(p.kind==='make'||p.kind==='grab')pinchEnd('p'+e.pointerId);if(S.mode==='chord'){if(p.chord!=null){if(chordIdx===p.chord)chordOff()}else melOff('p'+e.pointerId)}}
+    if(p.kind==='fret'){const q=proj(p.fs,p);if(Math.abs(q.d)>30||q.u<0||q.u>1||!strings.includes(p.fs)){if(p.fs.fret&&p.fs.fret.k===id)p.fs.fret=null;p.kind='strum'}else p.fs.fret={k:id,u:Math.max(.04,Math.min(.96,q.u))}}
+    if(p.kind==='strum'){const d=Math.hypot(p.x-p.px,p.y-p.py);strum({x:p.px,y:p.py},p,.35+d/45,id)}else if(p.kind==='make'||p.kind==='grab')holdMove(id,p);p.px=p.x;p.py=p.y}});
+function pointerFrame(){if(S.mode!=='strings')return;const now=performance.now();for(const[id,p]of ptr)if(p.kind==='pend'&&now-p.t0>260){p.kind='make';holdStart('p'+id,{x:p.sx,y:p.sy},0);holdMove('p'+id,p);if(navigator.vibrate)navigator.vibrate(15)}}
+function pUp(e){const p=ptr.get(e.pointerId);if(!p)return;ptr.delete(e.pointerId);padInside.delete('p'+e.pointerId);if(p.kind==='make'||p.kind==='grab')holdEnd('p'+e.pointerId);if(p.kind==='fret'&&p.fs.fret&&p.fs.fret.k==='p'+e.pointerId)p.fs.fret=null;if(S.mode==='chord'){if(p.chord!=null){if(chordIdx===p.chord)chordOff()}else melOff('p'+e.pointerId)}}
 cv.addEventListener('pointerup',pUp);cv.addEventListener('pointercancel',pUp);
 
 /* klavye: masaüstünde ekstra */
@@ -481,6 +550,7 @@ function draw(now){
   if(beatGlow>0){ctx.save();ctx.strokeStyle=`rgba(255,79,216,${beatGlow*.6})`;ctx.lineWidth=10*beatGlow;ctx.strokeRect(0,0,W,H);ctx.restore();beatGlow*=.88;if(beatGlow<.02)beatGlow=0}
   if(S.mode==='chord')drawChordMode();else if(S.mode==='pads')drawPads();else if(S.mode==='strings')drawStrings();else drawTheremin();
   drawHands();drawParticles();drawWave();
+  if(mrec&&mrec.state==='recording'){ctx.save();ctx.font='800 14px system-ui';ctx.textAlign='right';ctx.fillStyle='#ffffffaa';ctx.fillText('🎶 Hava Orkestrası',W-14,H-14);ctx.restore()}
   if(LOOP.state!=='off'&&ac){const now=ac.currentTime;let f,col;if(LOOP.state==='count'){f=1-(LOOP.start-now)/(LOOP.len/2);col='#8b5cff'}else{f=((now-LOOP.start)%LOOP.len)/LOOP.len;col={rec:'#ff3b5c',play:'#1fbf6a',dub:'#ff9f1c'}[LOOP.state]}
     ctx.fillStyle=col;ctx.fillRect(0,0,W*Math.max(0,Math.min(1,f)),4);if(LOOP.state==='count'){const n=Math.ceil((LOOP.start-now)/(LOOP.len/8));if(n>0&&n<=4){ctx.save();ctx.fillStyle='#ffffffdd';ctx.font='900 90px system-ui';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(n,W/2,H/2);ctx.restore()}}}
   if((S.beat||S.arp)&&beatStep>=0){const n=16,w=Math.min(240,W*.6),x0=(W-w)/2,y=botY()-2;for(let i=0;i<n;i++){ctx.fillStyle=i===beatStep?'#ff4fd8':(i%4===0?'#ffffff55':'#ffffff22');ctx.fillRect(x0+i*w/n+1,y,w/n-2,3)}}
@@ -510,9 +580,8 @@ function drawTheremin(){
     ctx.fillStyle='#fff';ctx.font='900 34px system-ui';ctx.textAlign='center';ctx.fillText(nameOf(m),x,Math.max(t+40,y-40));ctx.textAlign='left'}
 }
 function drawHands(){
-  for(const h of hands){const P=h.pts;ctx.save();ctx.lineCap='round';ctx.strokeStyle=h.role==='L'?'#4fd1ffcc':'#ff4fd8cc';ctx.shadowColor=ctx.strokeStyle;ctx.shadowBlur=12;ctx.lineWidth=Math.max(2,h.size*.05);
-    ctx.beginPath();for(const[a,b]of CON){ctx.moveTo(P[a].x,P[a].y);ctx.lineTo(P[b].x,P[b].y)}ctx.stroke();
-    ctx.shadowBlur=0;P.forEach((p,i)=>{ctx.fillStyle=TIPS.includes(i)?FCOL[TIPS.indexOf(i)]:i===4?'#fff':'#ffffffaa';ctx.beginPath();ctx.arc(p.x,p.y,TIPS.includes(i)||i===4?Math.max(4,h.size*.08):2.5,0,7);ctx.fill()});
+  for(const h of hands){const P=h.pts;ctx.save();ctx.lineCap='round';const hc=h.role==='L'?'79,209,255':'255,79,216',lw=Math.max(2,h.size*.045);ctx.beginPath();for(const[a,b]of CON){ctx.moveTo(P[a].x,P[a].y);ctx.lineTo(P[b].x,P[b].y)}
+    ctx.strokeStyle=`rgba(${hc},.22)`;ctx.lineWidth=lw*3.2;ctx.stroke();ctx.strokeStyle=`rgba(${hc},.9)`;ctx.lineWidth=lw;ctx.stroke();P.forEach((p,i)=>{ctx.fillStyle=TIPS.includes(i)?FCOL[TIPS.indexOf(i)]:i===4?'#fff':'#ffffffaa';ctx.beginPath();ctx.arc(p.x,p.y,TIPS.includes(i)||i===4?Math.max(4,h.size*.08):2.5,0,7);ctx.fill()});
     if(S.mode==='strings'&&h.pr[0]<.9){const on=strPinch.has(h.role);ctx.strokeStyle=on?'#fff':'#ffffff44';ctx.lineWidth=on?4:1.5;ctx.beginPath();ctx.moveTo(P[4].x,P[4].y);ctx.lineTo(P[8].x,P[8].y);ctx.stroke()}
     if(S.mode==='chord'){const st=pinchSt[h.role];TIPS.forEach((t,f)=>{const r=h.pr[f];if(r<.9){ctx.strokeStyle=st[f]?FCOL[f]:FCOL[f]+'44';ctx.lineWidth=st[f]?5:1.5;ctx.beginPath();ctx.moveTo(P[4].x,P[4].y);ctx.lineTo(P[t].x,P[t].y);ctx.stroke()}});
       ctx.fillStyle='#ffffffcc';ctx.font='800 12px system-ui';ctx.textAlign='center';ctx.fillText(h.role==='L'?'AKOR ELİ':'MELODİ ELİ',P[0].x,P[0].y+22)}
@@ -527,7 +596,7 @@ function drawWave(){if(!analyser)return;analyser.getByteTimeDomainData(waveData)
 /* ---------- kamera + model ---------- */
 const VER='0.10.14',CDN=`https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${VER}`;
 const MODEL='https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task';
-let landmarker=null,lastVT=-1,stream=null,camOn=false;
+let detMs=0,detN=0,landmarker=null,lastVT=-1,stream=null,camOn=false;
 const status=t=>{$('#status').textContent=t};
 const modelP=(async()=>{try{const vision=await import(`${CDN}/vision_bundle.mjs`);const fs=await vision.FilesetResolver.forVisionTasks(`${CDN}/wasm`);
   const o=d=>({baseOptions:{modelAssetPath:MODEL,delegate:d},runningMode:'VIDEO',numHands:2,minHandDetectionConfidence:.55,minHandPresenceConfidence:.5,minTrackingConfidence:.5});
@@ -536,20 +605,20 @@ const modelP=(async()=>{try{const vision=await import(`${CDN}/vision_bundle.mjs`
 async function startCam(){
   if(!navigator.mediaDevices?.getUserMedia)throw new Error('Bu tarayıcı kamerayı desteklemiyor');
   stream?.getTracks().forEach(t=>t.stop());
-  stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:S.facing,width:{ideal:960},height:{ideal:720}},audio:false});
+  stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:S.facing,width:{ideal:W<700?640:960},height:{ideal:W<700?480:720}},audio:false});
   vid.srcObject=stream;await vid.play().catch(()=>{});mirror=S.facing==='user';camOn=true;lastVT=-1;
 }
 async function start(withCam){
-  initAudio();keepAwake();$('#intro').hidden=true;
+  initAudio();keepAwake();$('#intro').hidden=true;renderTut();
   if(withCam){status('Kamera açılıyor…');try{await startCam()}catch(e){camOn=false;status('Kamera açılamadı: ekrana dokunarak çalabilirsin');setTimeout(()=>status(''),5000);showHelp();return}
     if(!landmarker){status('El takibi yükleniyor… (ilk açılışta birkaç saniye)');const ok=await modelP;if(!ok){status('El takibi yüklenemedi, internetini kontrol et. Dokunarak çalabilirsin.');return}}
-    status('Ellerini kameraya göster 🖐️');setTimeout(()=>{if($('#status').textContent.startsWith('Ellerini'))status('')},4000)}
+    renderTut();status('Ellerini kameraya göster 🖐️');setTimeout(()=>{if($('#status').textContent.startsWith('Ellerini'))status('')},4000)}
   showHelp();
 }
 function loop(){
   requestAnimationFrame(loop);
-  if(camOn&&landmarker&&vid.readyState>=2&&vid.currentTime!==lastVT){lastVT=vid.currentTime;try{const r=landmarker.detectForVideo(vid,performance.now());processHands(r.landmarks||[])}catch(e){}}
-  thereminFrame();pointerFrame();draw();
+  if(camOn&&landmarker&&vid.readyState>=2&&vid.currentTime!==lastVT){lastVT=vid.currentTime;try{const t0=performance.now(),r=landmarker.detectForVideo(vid,t0);detMs=detMs*.9+(performance.now()-t0)*.1;detN++;processHands(r.landmarks||[])}catch(e){}}
+  thereminFrame();pointerFrame();if(S.mode==='strings')bendRings();draw();
 }
 requestAnimationFrame(loop);
 
@@ -557,11 +626,12 @@ requestAnimationFrame(loop);
 const HELP={
   chord:`<p><b>Sol el = akorlar.</b> Başparmağını bir parmağına değdir:</p><ul><li>👌 İşaret → 1. akor</li><li>Orta → 2. akor</li><li>Yüzük → 3. akor</li><li>Serçe → 4. akor</li></ul><p><b>Sağ el = melodi.</b> Elini yukarı/aşağı götürerek notayı seç:</p><ul><li>İşaret + başparmak → nota çalar (basılı tutup kaydır)</li><li>Orta + başparmak → iki sesli nota</li><li>Yüzük → trampet · Serçe → bas davul</li></ul><p>✨ <b>Arpej</b> açıksa akorlar otomatik dans eder. 🥁 <b>Ritim</b> ile arkaya beat koy. 🔁 <b>Döngü</b>: 4 vuruş sayar, 2 ölçü çaldığını kaydeder ve tekrar tekrar çalar; tekrar basınca üstüne ekler.</p><p>Dokunmatik: sol yarıya dokun akor, sağ yarıya dokun melodi. Klavye: A S D F akor, H J K L U I O Ü melodi.</p>`,
   pads:`<p><b>Havada davul çal!</b> İşaret ya da orta parmağının ucunu bir pad'in içine sok, çalar. Hızlı vurursan daha güçlü çalar.</p><ul><li>Üst sıra: davul, trampet, hi-hat, alkış</li><li>2. sıra: akorlar</li><li>Alt iki sıra: notalar</li></ul><p>İki elinle aynı anda çalabilirsin. Dokunmatik ekranda parmağınla da çalışır.</p>`,
-  strings:`<p><b>Kendi enstrümanını havada kur!</b></p><ul><li>👌 Başparmak + işaret parmağını birleştir, <b>çek</b> ve bırak → iki nokta arasında <b>tel</b> oluşur</li><li>Parmağını tellerin üzerinden geçir → geçtiğin <b>tüm teller</b> sırayla çalar (gitar gibi tarama)</li><li><b>Uzun tel kalın</b>, kısa tel ince ses verir. Notalar gama otomatik oturur, hiç falsolu ses çıkmaz</li><li>Telin ucunu çimdikle tut ve sürükle → yeniden akort et. İki ucu üst üste getir → tel silinir</li><li>🎼 <b>Hazır arp</b> ile anında 7-10 tellik arp kur</li></ul><p>Dokunmatik: parmağını <b>basılı tut</b> (titreşince) ve çek → tel. Hızlı kaydır → çal.</p>`,
+  strings:`<p><b>Havada kendi telini ger ve çal!</b></p><ul><li>👌 Başparmak + işaret parmağını birleştir ve çek: <b>tel elinde gerilir</b>. Elin tutarken bile çalabilirsin; gerdikçe ses incelir. Bırakınca tel havada kalır</li><li>İki elinle de tutabilirsin: bir elin telin ucunu çimdiklesin, diğeri öbür ucunu</li><li>Parmağını telin <b>üzerinden geçir</b>: geçtiğin <b>tüm teller</b> sırayla çalar</li><li>🎚️ Bir parmağını telin <b>üstünde tut</b> = perde (turuncu nokta). Öbür elinle çal; perdeyi kaydırınca ses <b>kayar</b></li><li><b>Uzun tel kalın, kısa tel ince</b> ses verir. Teldeki çentikler perde yerleri</li><li>Telin ucunu tutup öbür ucuna götür: tel silinir. 🎼 Hazır arp ile anında arp kur</li></ul><p>Dokunmatik: <b>basılı tut ve çek</b> = tel, <b>hızlı kaydır</b> = çal, <b>telin üstüne bas</b> = perde.</p>`,
   theremin:`<p><b>Theremin:</b> elini havada gezdirerek dalga gibi ses çıkar.</p><ul><li>Açık el → ses çalar, yumruk → susar</li><li>Yukarı → ince, aşağı → kalın</li><li>Sola → boğuk, sağa → parlak</li><li>İşaretle başparmağı yaklaştır → titreşim (vibrato)</li><li>İkinci elin yüksekliği → ses seviyesi</li></ul><p>Ayarlardan “notaya kilitle”yi kapatırsan sesler arasında kayarsın.</p>`,
 };
 function showHelp(){$('#helpBody').innerHTML=HELP[S.mode];$('#help').hidden=false}
-function setMode(m){releaseAll();S.mode=m;save();document.querySelectorAll('#modes button').forEach(b=>b.classList.toggle('on',b.dataset.mode===m));$('#arpBtn').hidden=m==='theremin'||m==='strings';$('#tools').hidden=m!=='strings'}
+function setMode(m){releaseAll();S.mode=m;save();document.querySelectorAll('#modes button').forEach(b=>b.classList.toggle('on',b.dataset.mode===m));$('#arpBtn').hidden=m==='theremin'||m==='strings';$('#tools').hidden=m!=='strings';visited.add(m);if(visited.size>=4)ach('explorer');renderTut()}
+const visited=new Set();
 document.querySelectorAll('#modes button').forEach(b=>b.onclick=()=>{initAudio();setMode(b.dataset.mode);if(!localStorage.getItem('seen_'+b.dataset.mode)){try{localStorage.setItem('seen_'+b.dataset.mode,1)}catch(e){}showHelp()}});
 document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>{$('#'+b.dataset.close).hidden=true;if(b.dataset.close==='saved'){const v=$('#prev');v.pause()}});
 $('#helpBtn').onclick=showHelp;$('#setBtn').onclick=()=>{$('#settings').hidden=false};
@@ -579,7 +649,9 @@ $('#styleSel').onchange=e=>{S.style=e.target.value;save()};
 const bpm=$('#bpm');bpm.value=S.bpm;$('#bpmVal').textContent=S.bpm+' BPM';bpm.oninput=()=>{S.bpm=+bpm.value;if(LOOP.state!=='off'){loopClear();status('Tempo değişti, döngü silindi');setTimeout(()=>status(''),2000)}$('#bpmVal').textContent=S.bpm+' BPM';if(delayNode)delayNode.delayTime.setTargetAtTime(60/S.bpm*.75,ac.currentTime,.1);save()};
 const rev=$('#rev');rev.value=S.reverb;rev.oninput=()=>{S.reverb=+rev.value;if(revSend)revSend.gain.value=S.reverb;save()};
 const vol=$('#vol');vol.value=S.vol;vol.oninput=()=>{S.vol=+vol.value;if(master)master.gain.value=S.vol;save()};
-const tog=(el,k)=>{el.classList.toggle('on',S[k]);el.onclick=()=>{S[k]=!S[k];el.classList.toggle('on',S[k]);save()}};tog($('#quantTog'),'quant');tog($('#videoTog'),'video');
+const tog=(el,k)=>{el.classList.toggle('on',S[k]);el.onclick=()=>{S[k]=!S[k];el.classList.toggle('on',S[k]);save()}};tog($('#quantTog'),'quant');tog($('#strQuantTog'),'strQuant');$('#strQuantTog').addEventListener('click',()=>retune());
+$('#toneSel').value=S.strTone;$('#toneSel').onchange=e=>{S.strTone=e.target.value;save();initAudio();ks(55+S.key,.8)};
+$('#tutSkip').onclick=()=>{tut=TUT.length;try{localStorage.setItem('havaTut',tut)}catch(e){}renderTut()};tog($('#videoTog'),'video');
 loadStrings();
 let lastW=W,lastH=H;addEventListener('resize',()=>{const fx=W/lastW,fy=H/lastH;if(fx!==1||fy!==1){strings.forEach(s=>{s.a={x:s.a.x*fx,y:s.a.y*fy};s.b={x:s.b.x*fx,y:s.b.y*fy}});retune();lastW=W;lastH=H}});
 $('#tUndo').onclick=()=>{initAudio();const s=strings.pop();if(s)burst((s.a.x+s.b.x)/2,(s.a.y+s.b.y)/2,0,14);saveStrings()};
@@ -589,6 +661,7 @@ $('#loopBtn').onclick=loopPress;$('#loopClr').onclick=loopClear;
 let wake=null;async function keepAwake(){try{if(navigator.wakeLock&&!document.hidden)wake=await navigator.wakeLock.request('screen')}catch(e){}}
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&camOn)keepAwake()});
 setMode(S.mode);
+if(location.search.includes('debug'))window.__ho={get strings(){return strings},LOOP,get hands(){return hands},get tut(){return tut},get notes(){return noteCount},get det(){return[detN,detMs.toFixed(1)]}};
 
 /* ---------- kayıt ---------- */
 let mrec=null,chunks=[],recStart=0,recTimer;
@@ -603,7 +676,7 @@ $('#rec').onclick=()=>{initAudio();if(mrec&&mrec.state==="recording"){mrec.stop(
     const blob=new Blob(chunks,{type:mrec.mimeType||type||'video/webm'});const url=URL.createObjectURL(blob);const ext=blob.type.includes('mp4')?'mp4':'webm';const name=`hava-orkestrasi-${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.${ext}`;
     $('#prev').src=url;const dl=$('#dl');dl.href=url;dl.download=name;
     const file=new File([blob],name,{type:blob.type});const sb=$('#shareBtn');sb.hidden=!(navigator.canShare&&navigator.canShare({files:[file]}));sb.onclick=()=>navigator.share({files:[file],title:'Hava Orkestrası'}).catch(()=>{});
-    $('#saved').hidden=false};
+    $('#saved').hidden=false;ach('video')};
   mrec.start(500);recStart=Date.now();const b=$('#rec');b.classList.add('live');
   const upd=()=>{const s=Math.floor((Date.now()-recStart)/1000);b.textContent=`⏹ ${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`};upd();recTimer=setInterval(upd,500)};
 
