@@ -50,7 +50,7 @@ const degOfY = y => (groundY - R - y) / slot - 1;
 const G = {
   state: 'demo', diff: 0, nNotes: 5, useMic: false, baseMidi: 55, calMidi: 55,
   x: 0, speed: 170, t: 0, hearts: 3, score: 0, combo: 0, bestCombo: 0, notes: 0, perfect: 0, songsDone: 0,
-  coins: [], pillars: [], hangs: [], gaps: [], signs: [], songs: [], parts: [], passed: 0,
+  coins: [], pillars: [], hangs: [], gates: [], hoops: [], gaps: [], signs: [], songs: [], parts: [], passed: 0,
   cursor: 0, songIdx: 0, round: 0, phraseId: 0, curSong: null,
   shake: 0, flash: 0, muted: false,
 };
@@ -58,9 +58,9 @@ const P = { d: -1, v: 0, ground: true, inv: 0, squash: 0, run: 0, mouth: 0 };
 const BEAT = 120;
 /* Zorluk: Kolay 5 nota, Usta 8 nota, Pro 8 nota + dar tolerans + ipucu sesi yok */
 const DIFFS = [
-  { notes: 5, tol: 40, guide: true, list: 0 },
-  { notes: 8, tol: 30, guide: true, list: 1 },
-  { notes: 8, tol: 20, guide: false, list: 1 },
+  { notes: 5, tol: 40, gate: 70, guide: true, list: 0 },
+  { notes: 8, tol: 30, gate: 55, guide: true, list: 1 },
+  { notes: 8, tol: 20, gate: 40, guide: false, list: 1 },
 ];
 const DF = () => DIFFS[G.diff];
 let best = 0; try { best = +localStorage.getItem('doReKos_best') || 0; } catch (e) {}
@@ -68,7 +68,7 @@ let best = 0; try { best = +localStorage.getItem('doReKos_best') || 0; } catch (
 /* ---------- Ses: mikrofon ve perde algılama (YIN) ---------- */
 let actx = null, analyser = null, buf = null, micOn = false, noiseFloor = 0.004, echoGate = 0;
 function audioCtx() {
-  if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+  if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
   if (actx.state === 'suspended') actx.resume();
   return actx;
 }
@@ -125,7 +125,7 @@ function trackPitch(T, r, dt) {
         if (T.candN < 3) { T.hang -= dt; return T; }
         T.sm = r.m; T.vel = 0;
       } else {
-        const a = Math.min(1, 0.5 + Math.abs(diff) * 0.5);   // küçük fark → yumuşat, büyük → hemen geç
+        const a = Math.min(1, 0.7 + Math.abs(diff) * 0.5);   // hafif yumuşatma, büyük fark → hemen geç
         const prev = T.sm; T.sm += diff * a;
         T.vel += ((T.sm - prev) / Math.max(dt, 1e-3) - T.vel) * Math.min(1, dt * 10);
       }
@@ -178,7 +178,15 @@ function readMic() {
   V.rms = rms;
   // asıl ayrımı YIN güveni yapar; ipucu sesi çalarken hoparlör yankısını ses sanma
   if (rms < Math.max(noiseFloor * 1.6, 0.004, GUIDE.on ? echoGate : 0)) return null;
-  const r = yin(buf, actx.sampleRate);
+  // Oyunda yalnızca gereken en kalın perdeye yetecek kadar yeni örneğe bak: pencere kısalır,
+  // gecikme ve işlem yükü azalır (ör. Do=C3 için ~23 ms yerine 43 ms)
+  let b = buf;
+  if (G.state === 'play') {
+    const minF = 440 * Math.pow(2, (G.baseMidi - 7 - 69) / 12);
+    const N = Math.min(buf.length, 2 * Math.ceil(actx.sampleRate / minF) + 8) & ~1;
+    b = buf.subarray(buf.length - N);
+  }
+  const r = yin(b, actx.sampleRate);
   if (!r || r.f < 65 || r.f > 1100) return null;
   return { m: 69 + 12 * Math.log2(r.f / 440), c: r.c };
 }
@@ -199,11 +207,11 @@ function readVoice(dt) {
   // vibratoyu adil değerlendirmek için ~150 ms ortalama
   V.centsAvg = n === V.note ? V.centsAvg + (c - V.centsAvg) * Math.min(1, dt / 0.1) : c;
   V.note = n; V.cents = Math.round(c);
-  /* Kuş sesini okla aynı anda izler (gecikme yok). Nota tolerans içindeyse (vibratonun merkezine göre)
-     kuş o notanın çizgisine tam oturur ve parlar; değilse gri kalır ve nota toplayamaz. */
+  /* Kuş sesini okla aynı yerde ve aynı anda izler. Nota tolerans içindeyse (vibratonun merkezine göre)
+     kuş parlar ve nota toplar; değilse soluk kalır ve nota toplayamaz. */
   V.locked = Math.abs(V.centsAvg) <= DF().tol && V.raw >= -0.5 && V.raw <= G.nNotes - 0.5;
   V.lock = V.locked ? n : -1;
-  V.deg = V.locked ? n : V.raw;
+  V.deg = V.raw;   // kuş tam sesinin olduğu yerde (okla aynı); notayı tutturunca parlar
 }
 function demoVoice() {
   const c = G.coins.find(c => !c.taken && c.x > G.x - 12 && c.x < G.x + BEAT * 1.3);
@@ -258,7 +266,7 @@ function guideUpdate() {
 /* ---------- Seviye üretimi ---------- */
 function resetWorld() {
   Object.assign(G, { x: 0, t: 0, speed: 170, hearts: 3, score: 0, combo: 0, bestCombo: 0, notes: 0, perfect: 0, songsDone: 0,
-    coins: [], pillars: [], hangs: [], gaps: [], signs: [], songs: [], parts: [], passed: 0, cursor: VW * 0.75, songIdx: 0, round: 0, curSong: null, shake: 0, flash: 0 });
+    coins: [], pillars: [], hangs: [], gates: [], hoops: [], gaps: [], signs: [], songs: [], parts: [], passed: 0, cursor: VW * 0.75, songIdx: 0, round: 0, curSong: null, shake: 0, flash: 0 });
   Object.assign(P, { d: -1, v: 0, ground: true, inv: 0, squash: 0 });
   buildSkyline();
 }
@@ -275,6 +283,7 @@ function addSong() {
   G.cursor += BEAT * 2.5;
   const obsP = Math.min(0.6, n === 0 && !round ? 0.12 : 0.22 + 0.06 * level);
   const gapP = Math.min(0.55, n === 0 && !round ? 0 : 0.15 + 0.07 * level);
+  const gateP = Math.min(0.4, n === 0 && !round ? 0.15 : 0.18 + 0.05 * level);
   for (const ph of song.phrases) {
     const notes = parsePhrase(ph), id = ++G.phraseId, list2 = [];
     for (const [d, b] of notes) {
@@ -291,6 +300,17 @@ function addSong() {
       if (canP && (!canH || Math.random() < 0.6)) G.pillars.push({ x: mx, w: 30, top: lo - 0.95 });
       else if (canH) G.hangs.push({ x: mx, w: 36, bot: hi + 0.95, sw: Math.random() * 6 });
     }
+    /* Nota kapısı: yerden göğe duvar, yalnızca o notanın hizasında açıklık (notayı söylemeden geçilmez).
+       Çember: uzun notalarda havada halka; içinden geçmek bonus. */
+    let lastGate = -1e9;
+    for (const c of list2) {
+      if (c.len >= BEAT * 1.9 && Math.random() < 0.7) { G.hoops.push({ x: c.x + Math.min(c.len * 0.5, BEAT * 0.9), d: c.d, done: false }); continue; }
+      if (c.len >= BEAT * 0.95 && c.x - lastGate > BEAT * 2.5 && Math.random() < gateP) {
+        const x = c.x + Math.min(BEAT * 0.3, c.len * 0.35);
+        G.gates.push({ x, d: c.d, w: 26, done: false }); lastGate = c.x;
+        G.pillars = G.pillars.filter(q => Math.abs(q.x - x) > 55); G.hangs = G.hangs.filter(q => Math.abs(q.x - x) > 55);
+      }
+    }
     G.cursor += BEAT * 1.5; // nefes payı
   }
   rec.end = G.cursor - BEAT;
@@ -302,7 +322,7 @@ function ensureLevel() {
   const cut = G.x - PX - 200;
   if (G.coins.length && G.coins[0].x < cut) {
     G.coins = G.coins.filter(c => c.x > cut); G.pillars = G.pillars.filter(p => p.x > cut);
-    G.hangs = G.hangs.filter(p => p.x > cut); G.gaps = G.gaps.filter(g => g.x1 > cut); G.signs = G.signs.filter(s => s.x > cut - 200);
+    G.hangs = G.hangs.filter(p => p.x > cut); G.gates = G.gates.filter(p => p.x > cut); G.hoops = G.hoops.filter(p => p.x > cut); G.gaps = G.gaps.filter(g => g.x1 > cut); G.signs = G.signs.filter(s => s.x > cut - 200);
   }
 }
 
@@ -380,7 +400,7 @@ function update(dt) {
   const prev = P.d;
   const support = demo || P.inv > 0 || !overGap(G.x);
   if (V.on) {
-    P.d += (V.deg - P.d) * (1 - Math.exp(-dt * 90));       // okla senkron (~10 ms yumuşatma)
+    P.d = V.deg;                                           // okla birebir aynı anda, aynı yerde
     P.v = (P.d - prev) / Math.max(dt, 1e-3);
     if (P.d < -1 && support) P.d = -1;
     P.ground = false;
@@ -397,6 +417,21 @@ function update(dt) {
   if (!demo && P.inv <= 0) {
     for (const p of G.pillars) if (Math.abs(p.x - G.x) < 60 && circleRect(G.x, py, R * 0.82, p.x - p.w / 2, yOf(p.top) - 6, p.x + p.w / 2, groundY + 50)) { hurt(); break; }
     for (const h of G.hangs) if (Math.abs(h.x - G.x) < 60 && circleRect(G.x, py, R * 0.82, h.x - h.w / 2, -2000, h.x + h.w / 2, yOf(h.bot))) { hurt(); break; }
+    for (const g of G.gates) {
+      if (Math.abs(g.x - G.x) > g.w / 2 + R * 0.4) continue;
+      const o = openSpan(g.d);
+      if (py < o.top || py > o.bot) { hurt(); if (G.state === 'play') floatText(G.x, py - 30, NOTE_NAMES[g.d] + ' söyle!', COLORS[g.d]); break; }
+    }
+  }
+  for (const h of G.hoops) {
+    if (h.done || G.x < h.x) continue;
+    h.done = true; if (demo) continue;
+    const o = openSpan(h.d);
+    if (py >= o.top && py <= o.bot) {
+      const pts = 50 * Math.min(4, 1 + Math.floor(G.combo / 8)); G.score += pts;
+      burst(h.x, yOf(h.d), '#ffe066', 18); floatText(h.x, yOf(h.d) - 40, 'Çember! +' + pts, '#ffe066');
+      tone(noteHz(h.d) * 2, 0.35, 'triangle', 0.03); tone(noteHz(h.d) * 3, 0.35, 'sine', 0.02, 0, 0.08);
+    }
   }
   // notalar
   for (const c of G.coins) {
@@ -480,6 +515,11 @@ function buildSkyline() {
 }
 function rr(x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
 const sx = wx => wx - G.x + PX;
+/* Kapı/çember açıklığı: notanın ±gate cent'i (kuşun merkezi bu aralıkta olmalı) */
+function openSpan(d) {
+  const g = DF().gate / 100;
+  return { top: yOf(relToDeg(SEMIS[d] + g, G.nNotes, false)), bot: yOf(relToDeg(SEMIS[d] - g, G.nNotes, false)) };
+}
 
 function draw() {
   ctx.setTransform(DPR * S, 0, 0, DPR * S, 0, 0);
@@ -562,6 +602,26 @@ function draw() {
     ctx.strokeStyle = '#ff4dd2'; ctx.lineWidth = 2.5; ctx.shadowColor = '#ff4dd2'; ctx.shadowBlur = 10; rr(x - h.w / 2 + 3 + sw, bot - 31, h.w - 6, 28, 6); ctx.stroke(); ctx.shadowBlur = 0;
     ctx.fillStyle = '#ff9fe8'; ctx.font = '700 15px Fredoka,system-ui'; ctx.textAlign = 'center'; ctx.fillText('✕', x + sw, bot - 16);
   }
+  // nota kapıları
+  for (const g of G.gates) {
+    const x = sx(g.x); if (x < -60 || x > VW + 60) continue;
+    const o = openSpan(g.d), top = o.top - R, bot = o.bot + R, col = COLORS[g.d], w = g.w;
+    const wall = (y0, y1) => { if (y1 <= y0) return; ctx.fillStyle = '#5a3fa6'; ctx.fillRect(x - w / 2, y0, w, y1 - y0);
+      ctx.fillStyle = '#46308a'; for (let y = Math.ceil(y0 / 14) * 14; y < y1; y += 14) ctx.fillRect(x - w / 2, y, w, 3);
+      ctx.globalAlpha = 0.6; ctx.fillStyle = col; ctx.fillRect(x - w / 2, y0, 3, y1 - y0); ctx.fillRect(x + w / 2 - 3, y0, 3, y1 - y0); ctx.globalAlpha = 1; };
+    wall(-20, top); wall(bot, groundY);
+    ctx.save(); ctx.shadowColor = col; ctx.shadowBlur = 14; ctx.fillStyle = col;
+    rr(x - w / 2 - 4, top - 6, w + 8, 8, 4); ctx.fill(); rr(x - w / 2 - 4, bot - 2, w + 8, 8, 4); ctx.fill(); ctx.restore();
+    ctx.globalAlpha = 0.85; ctx.fillStyle = col; ctx.font = '700 11px Fredoka,system-ui'; ctx.textAlign = 'center';
+    ctx.fillText(NOTE_NAMES[g.d], x, top - 14); ctx.globalAlpha = 1;
+  }
+  const hoopDraw = front => { for (const h of G.hoops) {
+    const x = sx(h.x); if (x < -40 || x > VW + 40) continue;
+    const o = openSpan(h.d), cy = (o.top + o.bot) / 2, ry = (o.bot - o.top) / 2 + R;
+    ctx.save(); ctx.strokeStyle = h.done ? '#ffffff55' : '#ffd84d'; ctx.lineWidth = 6; ctx.shadowColor = '#ffd84d'; ctx.shadowBlur = h.done ? 0 : 12;
+    ctx.beginPath(); ctx.ellipse(x, cy, 11, ry, 0, front ? Math.PI / 2 : -Math.PI / 2, front ? Math.PI * 1.5 : Math.PI / 2); ctx.stroke(); ctx.restore();
+  } };
+  hoopDraw(false);
   // melodi yolu
   ctx.lineWidth = 3; ctx.setLineDash([2, 7]); ctx.lineCap = 'round';
   for (let i = 0; i < G.coins.length - 1; i++) {
@@ -593,6 +653,7 @@ function draw() {
   }
   ctx.globalAlpha = 1;
   drawHero(PX, yOf(P.d), next);
+  hoopDraw(true);
   // sesin göstergesi (sol kenar)
   if (V.on && G.state === 'play') {
     const y = yOf(Math.max(-0.5, V.raw)), col = V.locked ? COLORS[Math.max(0, Math.min(G.nNotes - 1, V.lock))] : '#ffffffaa';
