@@ -180,8 +180,9 @@ function readVoice(dt) {
   trackPitch(TR, r, dt);
   V.level += ((micOn ? Math.min(1, V.rms * 12) : (V.on ? 0.6 : 0)) - V.level) * Math.min(1, dt * 15);
   if (G.state === 'demo') return demoVoice();
-  if (pointer.down) { const d = degOfY(pointer.y); V.on = d > -0.55; V.deg = Math.min(G.nNotes - 0.4, Math.max(-0.4, d)); V.cents = V.centsAvg = 0; return; }
-  if (keyDeg !== null) { V.on = true; V.deg = keyDeg; V.cents = V.centsAvg = 0; return; }
+  // Mikrofonla oynarken elle yönetme yok: karakter yalnızca sesle hareket eder
+  if (!G.useMic && pointer.down) { const d = degOfY(pointer.y); V.on = d > -0.55; V.deg = Math.min(G.nNotes - 0.4, Math.max(-0.4, d)); V.cents = V.centsAvg = 0; return; }
+  if (!G.useMic && keyDeg !== null) { V.on = true; V.deg = keyDeg; V.cents = V.centsAvg = 0; return; }
   V.on = TR.on;
   if (V.on) {
     V.midi = TR.sm; V.rel = foldRel(TR.sm); V.deg = relToDeg(V.rel, G.nNotes);
@@ -734,14 +735,14 @@ $('#again').onclick = () => G.useMic ? startGame() : $('#touchStart').onclick();
 $('#overMenu').onclick = toDemo;
 $('#muteBtn').onclick = () => { G.muted = !G.muted; $('#muteBtn').textContent = G.muted ? '🔇' : '🔊'; };
 
-cv.addEventListener('pointerdown', e => { if (G.state !== 'play') return; pointer.down = true; pointer.y = e.clientY / S; cv.setPointerCapture(e.pointerId); });
+cv.addEventListener('pointerdown', e => { if (G.state !== 'play' || G.useMic) return; pointer.down = true; pointer.y = e.clientY / S; cv.setPointerCapture(e.pointerId); });
 cv.addEventListener('pointermove', e => { if (pointer.down) pointer.y = e.clientY / S; });
 const up = () => { pointer.down = false; };
 cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
 addEventListener('keydown', e => {
   if (e.key === 'p' || e.key === 'P' || e.key === 'Escape') { G.state === 'play' ? pauseGame() : resumeGame(); return; }
   const n = parseInt(e.key, 10);
-  if (n >= 1 && n <= G.nNotes) keyDeg = n - 1;
+  if (!G.useMic && n >= 1 && n <= G.nNotes) keyDeg = n - 1;
 });
 addEventListener('keyup', e => { const n = parseInt(e.key, 10); if (n >= 1 && n - 1 === keyDeg) keyDeg = null; });
 addEventListener('resize', layout);

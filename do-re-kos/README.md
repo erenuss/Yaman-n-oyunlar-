@@ -22,6 +22,6 @@ Sesinle yönettiğin bir koşu oyunu. Tarayıcıda, telefonda ve bilgisayarda ç
 - Notalar gerçek perdelerdir (Do = C, Re = D …); oyun sırasında baz kaymaz, isabet gerçek notaya göre ölçülür.
 - Notaya yakın ses, karakteri o notanın çizgisine “mıknatıs” gibi oturtur. Mi–Fa gibi yarım ton aralıklar da aynı kolaylıkta.
 - “Tam isabet” cent cinsinden ölçülür (±30 cent, ~150 ms ortalama), yani vibrato yapan cezalandırılmaz.
-Mikrofon yoksa ekrana dokunup parmağını kaydırarak ya da 1–8 tuşlarıyla oynanabilir. P / Esc: duraklat.
+Mikrofonla oynarken karakter **yalnızca sesle** hareket eder; dokunma ve tuşlar kapalıdır. Mikrofon yoksa “Mikrofonsuz dene” ile ekrana dokunup parmağını kaydırarak ya da 1–8 tuşlarıyla oynanabilir. P / Esc: duraklat.
 
 Mikrofon için sayfanın https üzerinden açılması gerekir (ör. GitHub Pages: `/do-re-kos/`).
