@@ -10,7 +10,7 @@ Sesinle yönettiğin bir koşu oyunu. Tarayıcıda, telefonda ve bilgisayarda ç
 
 ## Tasarım
 
-1. **Ses ayarı (gerçek Do):** Önce ortam gürültüsü ölçülür. Rahat bir “Aaaa” ile sesinin kalın mı ince mi olduğu bulunur ve sana uygun oktavdaki **gerçek Do (C)** notası çalınır. Sen aynısını söylersin; ±35 cent içinde ~1 saniye tutunca baz tam C olur (C3, C4…). Başka bir oktavda söylersen o oktavın Do'su seçilir. Kalın/İnce hazır ayarlar da var.
+1. **Ses ayarı (gerçek Do zorunlu):** Önce ortam gürültüsü ölçülür. Rahat bir “Aaaa” ile sana uygun oktav bulunur ve **gerçek Do (C)** çalınır. Oyuncu aynısını söylemeden geçemez: kalın↔ince göstergesi ve “2 yarım ton daha kalın ↓ / çok az yükselt ↑ / Tam Do! Tut…” yönlendirmesiyle Do'ya getirilir; ±30 cent içinde 1.2 saniye tutunca baz tam C olur. Uzun süre olmazsa Do kendiliğinden tekrar çalınır; Do çok kalın/ince gelirse bir oktav değiştirilebilir. Hazır ayar kısayolu yoktur.
 2. **Zorluk:** Kolay 5 nota (Do–Sol), Usta tam oktav (8 nota).
 3. **Şarkılar:** Merdiven, Mary'nin Kuzusu, Neşeye Övgü, Jingle Bells, Daha Dün Annemizin, Tembel Çocuk, Gam Merdiveni (kamu malı ezgiler). Liste bitince daha hızlı yeni tur başlar.
 4. **Engeller** hep melodi yolunun dışında üretilir: notayı bir sonrakine kadar tutan bir şarkıcı hiç çarpmaz.

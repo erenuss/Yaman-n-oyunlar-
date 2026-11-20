@@ -59,6 +59,12 @@
     <h2>Sesini tanıyalım</h2>
     <p id="calibMsg" class="sub">Bir saniye sessiz kal…</p>
     <div class="ring"><svg viewBox="0 0 120 120"><circle cx="60" cy="60" r="52" class="track"/><circle cx="60" cy="60" r="52" id="ringFill" class="fill"/></svg><div id="calibNote">—</div></div>
+    <div id="tuneMeter" class="meter hidden" aria-hidden="true">
+      <span>kalın</span>
+      <div class="mtrack"><i class="zone"></i><i class="mid">Do</i><b id="needle"></b></div>
+      <span>ince</span>
+    </div>
+    <p id="tuneTxt" class="tunetxt hidden" role="status"></p>
     <div id="scalePreview" class="scale"></div>
     <p class="hint" id="calibHint">Önce sesinin kalın mı ince mi olduğuna bakacağız.</p>
     <button id="refPlay" class="ghost hidden">🔊 Do'yu tekrar dinle</button>
@@ -66,9 +72,8 @@
       <button id="calibGo" class="big" disabled>Hazırım, koş! →</button>
     </div>
     <div class="row small">
-      <button id="calibRedo" class="ghost">Yeniden ölç</button>
-      <button id="presetLow" class="ghost">Kalın ses hazır ayar</button>
-      <button id="presetHigh" class="ghost">İnce ses hazır ayar</button>
+      <button id="calibRedo" class="ghost">Baştan başla</button>
+      <button id="octSwap" class="ghost hidden">Do'yu bir oktav değiştir</button>
     </div>
   </div>
 </section>
