@@ -18,31 +18,26 @@ button:focus-visible,select:focus-visible,a:focus-visible{outline:2px solid var(
 #top>*{pointer-events:auto}
 .seg{display:flex;gap:2px;padding:4px;border-radius:999px;background:rgba(10,10,11,.72);border:1px solid var(--line);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)}
 .seg button{display:flex;align-items:center;gap:7px;height:36px;padding:0 12px;border-radius:999px;color:var(--mut);transition:background .2s,color .2s}
-.seg button span{font-size:13px;font-weight:600;display:none}
+.seg button span{font-size:13px;font-weight:600}
 .seg button.on{background:var(--fg);color:#0a0a0b}
-.seg button.on span{display:inline}
 .seg button:not(.on):hover{color:var(--fg)}
 .ic{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;background:rgba(10,10,11,.72);border:1px solid var(--line);color:var(--fg);font-weight:600;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)}
 .ic svg{width:18px;height:18px}
 #helpBtn{position:absolute;right:12px;top:calc(env(safe-area-inset-top) + 12px)}
 
 /* alt çubuk */
-#bottom{position:fixed;left:0;right:0;bottom:0;display:flex;justify-content:center;align-items:flex-end;gap:6px;padding:10px 8px calc(env(safe-area-inset-bottom) + 14px);z-index:5;pointer-events:none}
+#bottom{position:fixed;left:0;right:0;bottom:0;display:grid;grid-template-columns:1fr auto 1fr;align-items:end;gap:6px;padding:10px 8px calc(env(safe-area-inset-bottom) + 14px);z-index:5;pointer-events:none}
 #bottom>*{pointer-events:auto}
+.side{display:flex;gap:4px}.side.left{justify-content:flex-end}.side.right{justify-content:flex-start}
 .rb{display:flex;flex-direction:column;align-items:center;gap:5px;width:60px;color:var(--fg)}
 .rb i{width:46px;height:46px;border-radius:50%;display:grid;place-items:center;background:rgba(10,10,11,.6);border:1px solid var(--line);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);transition:background .2s,border-color .2s,transform .12s}
 .rb small{font-size:11px;font-weight:500;color:var(--mut);white-space:nowrap}
 .rb:active i{transform:scale(.92)}
 .rb.on i{background:var(--fg);color:#0a0a0b;border-color:transparent}
 .rb.on small{color:var(--fg)}
-#loopBtn.count i,#loopBtn.rec i{background:var(--acc);border-color:transparent;color:#fff}
-#loopBtn.play i{background:var(--ok);border-color:transparent;color:#0a0a0b}
-#loopBtn.dub i{background:var(--warn);border-color:transparent;color:#0a0a0b}
 #rec{width:66px;height:66px;margin:0 8px 2px;border-radius:50%;border:3px solid var(--fg);display:grid;place-items:center;flex:none}
 #rec span{width:48px;height:48px;border-radius:50%;background:var(--acc);transition:all .2s}
 #rec.live span{width:24px;height:24px;border-radius:6px}
-#tools{position:fixed;right:2px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:14px;z-index:5}
-.rb.sm{width:68px}.rb.sm i{width:42px;height:42px}
 
 /* bildirimler */
 #status{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom) + 108px);padding:8px 14px;border-radius:999px;background:rgba(10,10,11,.8);border:1px solid var(--line);font-size:13px;color:var(--fg);z-index:4;pointer-events:none;white-space:nowrap;max-width:94vw;overflow:hidden;text-overflow:ellipsis}
@@ -95,30 +90,9 @@ video.prev{width:100%;border-radius:12px;background:#000;max-height:50vh;margin-
 .hero .primary{margin-top:14px;min-width:200px;height:52px;font-size:16px}
 .hero small{color:var(--mut);font-size:12px;margin-top:6px}
 .link{color:var(--mut);font-size:14px;text-decoration:underline;text-underline-offset:3px}
-body.intro #top,body.intro #bottom,body.intro #tools,body.intro #tut{display:none!important}
-
-/* şarkılar */
-.songlist{list-style:none;margin:0 0 8px;padding:0}
-.songlist button{width:100%;display:flex;align-items:center;gap:12px;padding:12px;border-radius:12px;text-align:left;transition:background .15s}
-.songlist button:hover{background:var(--surf)}
-.songlist .t{flex:1;display:flex;flex-direction:column}
-.songlist .t b{font-weight:600;font-size:15px}
-.songlist .t span{font-size:12px;color:var(--mut)}
-.songlist .lv{font-family:var(--mono);font-size:11px;color:var(--mut)}
-.songlist .best{font-family:var(--mono);font-size:12px;color:var(--acc);min-width:36px;text-align:right}
-.songlist .pl{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:var(--surf)}
-.songlist .pl svg{width:14px;height:14px;fill:currentColor;stroke:none}
-.eyebrow{font-size:12px;color:var(--mut);text-transform:uppercase;letter-spacing:.08em}
-#resTitle{font-size:28px;margin:6px 0 4px}
-.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:18px 0 6px}
-.stats div{padding:12px 6px;border-radius:12px;background:var(--surf)}
-.stats b{display:block;font-family:var(--mono);font-size:22px;font-weight:600}
-.stats span{font-size:12px;color:var(--mut)}
+body.intro #top,body.intro #bottom,body.intro #tut{display:none!important}
 
 @media(max-width:640px){
-  #top{padding-left:8px;padding-right:56px;justify-content:flex-start}
-  .seg button{padding:0 10px}
-  .seg button.on span{display:none}
   #bottom{gap:0}
   .rb{width:54px}.rb i{width:44px;height:44px}.rb small{font-size:10px}
   #rec{width:60px;height:60px;margin:0 4px 4px}#rec span{width:44px;height:44px}
