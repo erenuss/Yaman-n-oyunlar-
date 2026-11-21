@@ -97,7 +97,65 @@ def main():
         events = data.get("events", [])
         plausible = sum(e.get("assessment", {}).get("label") in ("plausible_doppler", "weak_doppler") for e in events)
         print("PASS: detection endpoint responded. Events:", len(events), "plausible-or-weak:", plausible, flush=True)
-        print("Note: This is an audio detection test, not a verified location prediction.", flush=True)
+        print("TEST 6: Metadata-stripped MP4 with same real aircraft audio", flush=True)
+        tagged = Path(tmp) / "source_with_test_metadata.mp4"
+        clean = Path(tmp) / "clean_aircraft_video.mp4"
+        subprocess.run([
+            "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+            "-f", "lavfi", "-i", "color=c=black:s=640x360:r=2",
+            "-i", str(wav), "-shortest",
+            "-c:v", "libx264", "-preset", "ultrafast", "-crf", "39", "-pix_fmt", "yuv420p",
+            "-c:a", "aac", "-b:a", "160k", "-movflags", "use_metadata_tags",
+            "-metadata", "title=GPS_REMOVAL_TEST_TITLE",
+            "-metadata", "location=+00.0000+000.0000/",
+            "-metadata", "creation_time=2026-05-12T20:22:20Z",
+            str(tagged),
+        ], check=True, timeout=120)
+        tagged_meta = subprocess.check_output([
+            "ffprobe", "-v", "error", "-show_entries", "format_tags:stream_tags",
+            "-of", "json", str(tagged)
+        ], text=True, timeout=30)
+        assert "GPS_REMOVAL_TEST_TITLE" in tagged_meta, "Original video did not contain expected metadata"
+        subprocess.run([
+            "ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-i", str(tagged),
+            "-map", "0:v:0", "-map", "0:a?", "-map_metadata", "-1",
+            "-map_metadata:s", "-1", "-map_chapters", "-1", "-c", "copy", str(clean)
+        ], check=True, timeout=120)
+        clean_meta = subprocess.check_output([
+            "ffprobe", "-v", "error", "-show_entries", "format_tags:stream_tags",
+            "-of", "json", str(clean)
+        ], text=True, timeout=30)
+        assert "GPS_REMOVAL_TEST_TITLE" not in clean_meta, "Title survived removal"
+        assert "+00.0000+000.0000/" not in clean_meta, "Location tag survived removal"
+        print("PASS: test metadata removed, video and audio preserved; size", clean.stat().st_size, flush=True)
+
+        print("TEST 7: Ingest metadata-stripped MP4 into Codespaces engine", flush=True)
+        cmd_video = [
+            "curl", "-fsS", "--max-time", "180", "-X", "POST",
+            "-F", "file=@" + str(clean) + ";type=video/mp4",
+            "-F", "owner_permission_confirmed=true",
+            "-F", "start_time_utc=2026-05-12T20:22:20.291Z",
+            "-F", "start_time_uncertainty_s=0",
+            ENGINE + "/api/recordings"
+        ]
+        video_out = subprocess.run(cmd_video, capture_output=True, text=True, timeout=190)
+        if video_out.returncode:
+            raise RuntimeError("Video upload failed: " + (video_out.stderr + video_out.stdout)[-1000:])
+        vp = json.loads(video_out.stdout)
+        vid = (vp.get("recording") or {}).get("id") or vp.get("recording_id")
+        if not vid:
+            result = await_job(vp, "MP4 audio extraction")
+            vid = (result.get("result") or {}).get("recording_id") or result.get("recording_id")
+        assert vid, "MP4 ingest did not yield recording id"
+        detect = json_request("/api/recordings/" + str(vid) + "/events/detect", "POST", {
+            "threshold_z": 2.5, "min_duration_s": 40, "save": True
+        })
+        if detect.get("job_id") or detect.get("id"):
+            await_job(detect, "MP4 event detection")
+        video_events = json_request("/api/recordings/" + str(vid) + "/events").get("events", [])
+        video_plausible = sum(e.get("assessment", {}).get("label") in ("plausible_doppler", "weak_doppler") for e in video_events)
+        print("PASS: clean MP4 video upload and event detection; events:", len(video_events), "plausible-or-weak:", video_plausible, flush=True)
+        print("Note: These are acoustic and metadata-removal tests, NOT verified GPS predictions.", flush=True)
 
 if __name__ == "__main__":
     try:
