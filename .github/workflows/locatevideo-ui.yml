@@ -1,0 +1,23 @@
+name: LocateVideo UI flow
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'doppler-locate/index.html'
+      - 'doppler-locate/app.js'
+      - '.github/workflows/locatevideo-ui.yml'
+      - 'scripts/locatevideo-ui-test.cjs'
+permissions:
+  contents: read
+jobs:
+  browser-logic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - name: JavaScript syntax check
+        run: node --check doppler-locate/app.js
+      - name: Install isolated DOM test dependency
+        run: npm install --no-save --ignore-scripts --no-audit --no-fund jsdom@26
+      - name: Verify video-first user journey
+        run: node scripts/locatevideo-ui-test.cjs
