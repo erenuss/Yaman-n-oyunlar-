@@ -22,11 +22,18 @@ const SONGS = {
   jingle: { name: 'Jingle Bells', phrases: ['Mi Mi Mi:2 Mi Mi Mi:2', 'Mi Sol Do:1.5 Re:.5 Mi:3', 'Fa Fa Fa:1.5 Fa:.5 Fa Mi Mi Mi', 'Mi Re Re Mi Re:2 Sol:2'] },
   dahadun: { name: 'Daha Dün Annemizin', phrases: ['Do Do Sol Sol La La Sol:2', 'Fa Fa Mi Mi Re Re Do:2', 'Sol Sol Fa Fa Mi Mi Re:2', 'Sol Sol Fa Fa Mi Mi Re:2', 'Do Do Sol Sol La La Sol:2', 'Fa Fa Mi Mi Re Re Do:2'] },
   tembel: { name: 'Tembel Çocuk', phrases: ['Do Re Mi Do Do Re Mi Do', 'Mi Fa Sol:2 Mi Fa Sol:2', 'Sol:.5 La:.5 Sol:.5 Fa:.5 Mi Do Sol:.5 La:.5 Sol:.5 Fa:.5 Mi Do', 'Do Sol Do:2 Do Sol Do:2'] },
+  saints: { name: 'Oh When the Saints', phrases: ['Do Mi Fa Sol:3', 'Do Mi Fa Sol:3', 'Do Mi Fa Sol:1.5 Mi:1.5 Do:1.5 Mi:1.5 Re:3', 'Mi Mi Re Do:1.5 Do Mi:1.5 Sol Sol Fa:3', 'Fa Mi Fa Sol:1.5 Mi:1.5 Do:1.5 Re:1.5 Do:3'] },
+  ayisigi: { name: 'Ay Işığında', phrases: ['Do Do Do Re Mi:2 Re:2', 'Do Mi Re Re Do:3', 'Do Do Do Re Mi:2 Re:2', 'Do Mi Re Re Do:3'] },
+  susanna: { name: 'Oh Susanna', phrases: ['Do Re Mi Sol Sol La:.5 Sol:.5 Mi Do', 'Re Mi Mi Re Do Re:3', 'Do Re Mi Sol Sol La:.5 Sol:.5 Mi Do', 'Re Mi Mi Re Re Do:3', 'Fa:2 Fa La:2 La:2 Sol Sol Mi Do Re:3', 'Do Re Mi Sol Sol La:.5 Sol:.5 Mi Do', 'Re Mi Mi Re Re Do:3'] },
+  london: { name: 'London Bridge', phrases: ['Sol:1.5 La:.5 Sol Fa Mi Fa Sol:2', 'Re Mi Fa:2 Mi Fa Sol:2', 'Sol:1.5 La:.5 Sol Fa Mi Fa Sol:2', 'Re:2 Sol:2 Mi Do:3'] },
+  macdonald: { name: 'Old MacDonald', phrases: ['Do Do Do Sol La La Sol:2', 'Mi Mi Re Re Do:3', 'Do Do Do Sol La La Sol:2', 'Mi Mi Re Re Do:3'] },
+  row: { name: 'Row Row Row Your Boat', phrases: ['Do:1.5 Do:1.5 Do Re:.5 Mi:1.5', 'Mi Re:.5 Mi Fa:.5 Sol:3', "Do':.5 Do':.5 Sol:.5 Sol:.5 Mi:.5 Mi:.5 Do:.5 Do:.5", 'Sol Fa:.5 Mi Re:.5 Do:3'] },
   gam: { name: 'Gam Merdiveni', phrases: ["Do Re Mi Fa Sol La Si Do':2", "Do' Si La Sol Fa Mi Re Do:2"] },
 };
 const PLAYLISTS = [
-  ['merdiven', 'kuzu', 'neseye', 'jingle'],
-  ['gam', 'dahadun', 'neseye', 'tembel', 'jingle', 'kuzu'],
+  // kolaydan zora; ilerledikçe yeni şarkılar açılır
+  ['merdiven', 'ayisigi', 'kuzu', 'neseye', 'saints', 'jingle'],
+  ['gam', 'dahadun', 'neseye', 'macdonald', 'tembel', 'london', 'saints', 'susanna', 'jingle', 'row'],
 ];
 const parsePhrase = p => p.split(/\s+/).map(t => { const [n, b] = t.split(':'); return [DEG[n], b ? parseFloat(b) : 1]; });
 
@@ -49,7 +56,7 @@ const degOfY = y => (groundY - R - y) / slot - 1;
 /* ---------- Durum ---------- */
 const G = {
   state: 'demo', diff: 0, nNotes: 5, useMic: false, baseMidi: 55, calMidi: 55,
-  x: 0, speed: 170, t: 0, hearts: 3, score: 0, combo: 0, bestCombo: 0, notes: 0, perfect: 0, songsDone: 0,
+  x: 0, speed: 170, t: 0, hearts: 3, slots: 3, shield: false, star: 0, score: 0, combo: 0, bestCombo: 0, notes: 0, perfect: 0, songsDone: 0,
   coins: [], pillars: [], hangs: [], gates: [], hoops: [], gaps: [], signs: [], songs: [], parts: [], passed: 0,
   cursor: 0, songIdx: 0, round: 0, phraseId: 0, curSong: null,
   shake: 0, flash: 0, muted: false,
@@ -265,7 +272,7 @@ function guideUpdate() {
 
 /* ---------- Seviye üretimi ---------- */
 function resetWorld() {
-  Object.assign(G, { x: 0, t: 0, speed: 170, hearts: 3, score: 0, combo: 0, bestCombo: 0, notes: 0, perfect: 0, songsDone: 0,
+  Object.assign(G, { x: 0, t: 0, speed: 170, hearts: 3, slots: 3, shield: false, star: 0, score: 0, combo: 0, bestCombo: 0, notes: 0, perfect: 0, songsDone: 0,
     coins: [], pillars: [], hangs: [], gates: [], hoops: [], gaps: [], signs: [], songs: [], parts: [], passed: 0, cursor: VW * 0.75, songIdx: 0, round: 0, curSong: null, shake: 0, flash: 0 });
   Object.assign(P, { d: -1, v: 0, ground: true, inv: 0, squash: 0 });
   buildSkyline();
@@ -284,6 +291,11 @@ function addSong() {
   const obsP = Math.min(0.6, n === 0 && !round ? 0.12 : 0.22 + 0.06 * level);
   const gapP = Math.min(0.55, n === 0 && !round ? 0 : 0.15 + 0.07 * level);
   const gateP = Math.min(0.4, n === 0 && !round ? 0.15 : 0.18 + 0.05 * level);
+  /* Kademeli zorluk (0 → 1): başta kapılar geniş, büyük sıçramalardan sonra kapı ve baca yok,
+     kapı notanın gerisinde (yetişme payı). Şarkılar ilerledikçe normale döner. */
+  const ramp = Math.min(1, level / 6);
+  const gateCents = Math.round(DF().gate + 55 * (1 - ramp));
+  const maxLeap = 1 + Math.round(3 * ramp);           // kapıdan önce izin verilen en büyük sıçrama (çizgi)
   for (const ph of song.phrases) {
     const notes = parsePhrase(ph), id = ++G.phraseId, list2 = [];
     for (const [d, b] of notes) {
@@ -295,6 +307,7 @@ function addSong() {
     for (let i = 0; i < list2.length - 1; i++) {
       const a = list2[i], b = list2[i + 1];
       if (b.x - a.x < BEAT * 0.95 || Math.random() > obsP) continue;
+      if (Math.abs(a.d - b.d) >= 3 && ramp < 0.7) continue; // büyük sıçramanın etrafı başta boş
       const lo = Math.min(a.d, b.d), hi = Math.max(a.d, b.d), mx = (a.x + b.x) / 2;
       const canP = lo >= 1 && !gap, canH = hi <= G.nNotes - 2;
       if (canP && (!canH || Math.random() < 0.6)) G.pillars.push({ x: mx, w: 30, top: lo - 0.95 });
@@ -303,16 +316,20 @@ function addSong() {
     /* Nota kapısı: yerden göğe duvar, yalnızca o notanın hizasında açıklık (notayı söylemeden geçilmez).
        Çember: uzun notalarda havada halka; içinden geçmek bonus. */
     let lastGate = -1e9;
-    for (const c of list2) {
-      if (c.len >= BEAT * 1.9 && Math.random() < 0.7) { G.hoops.push({ x: c.x + Math.min(c.len * 0.5, BEAT * 0.9), d: c.d, done: false }); continue; }
-      if (c.len >= BEAT * 0.95 && c.x - lastGate > BEAT * 2.5 && Math.random() < gateP) {
-        const x = c.x + Math.min(BEAT * 0.3, c.len * 0.35);
-        G.gates.push({ x, d: c.d, w: 26, done: false }); lastGate = c.x;
+    list2.forEach((c, i) => {
+      const leap = i ? Math.abs(c.d - list2[i - 1].d) : 99;   // cümle başı da “sıçrama” sayılır
+      if (c.len >= BEAT * 1.9 && Math.random() < 0.7) { G.hoops.push({ x: c.x + Math.min(c.len * 0.5, BEAT * 0.9), d: c.d, cents: gateCents + 15, done: false }); return; }
+      const last = i === list2.length - 1;                    // cümle sonu: oyuncular sesi erken bırakır
+      if (!last && c.len >= BEAT * 0.95 && leap <= maxLeap && c.x - lastGate > BEAT * 2.5 && Math.random() < gateP) {
+        const x = c.x + Math.min(BEAT * (0.55 - 0.25 * ramp), c.len * 0.6);
+        G.gates.push({ x, d: c.d, w: 26, cents: gateCents, done: false }); lastGate = c.x;
         G.pillars = G.pillars.filter(q => Math.abs(q.x - x) > 55); G.hangs = G.hangs.filter(q => Math.abs(q.x - x) > 55);
       }
-    }
+    });
     G.cursor += BEAT * 1.5; // nefes payı
   }
+  { const pool = G.coins.filter(c => c.song === rec && c.len >= BEAT * 0.95 && c.ph !== G.coins.find(q => q.song === rec).ph);
+    if (pool.length && Math.random() < (round ? 0.6 : 0.85)) pool[Math.floor(Math.random() * pool.length)].heart = true; }
   rec.end = G.cursor - BEAT;
   G.songs.push(rec);
   G.cursor += BEAT * 1.5;
@@ -331,7 +348,7 @@ function show(id) { for (const s of ['menu', 'calib', 'pause', 'over']) $('#' + 
 function startGame() {
   G.nNotes = DF().notes; layout(); resetWorld();
   G.state = 'play'; show(null); $('#hud').classList.remove('hidden');
-  updateHearts(); ensureLevel();
+  updateHearts(); updatePowers(); ensureLevel();
 }
 function toDemo() {
   G.state = 'demo'; $('#hud').classList.add('hidden'); G.nNotes = DF().notes; layout(); resetWorld(); ensureLevel();
@@ -354,8 +371,25 @@ function gameOver() {
   setTimeout(() => show('over'), 500);
   tone(392, 0.2, 'triangle', 0.06); tone(330, 0.2, 'triangle', 0.06, 0, 0.18); tone(262, 0.4, 'triangle', 0.06, 0, 0.36);
 }
-function updateHearts() {
-  $('#hearts').innerHTML = [0, 1, 2].map(i => i < G.hearts ? '❤' : '<span class="off">❤</span>').join('');
+const MAX_HEARTS = 5;
+function updateHearts(fx) {
+  G.slots = Math.max(G.slots || 3, G.hearts);          // kaybedilen can boş kalp olarak görünür
+  const slots = G.slots;
+  $('#hearts').innerHTML = Array.from({ length: slots }, (_, i) =>
+    i < G.hearts ? '<span class="h' + (fx === 'gain' && i === G.hearts - 1 ? ' gain' : '') + '">❤</span>'
+                 : '<span class="off' + (fx === 'hit' && i === G.hearts ? ' lost' : '') + '">❤</span>').join('');
+  if (fx === 'hit') { const h = $('#hearts'); h.classList.remove('shake'); void h.offsetWidth; h.classList.add('shake'); }
+}
+function updatePowers() {
+  $('#powers').innerHTML = (G.shield ? '<span class="pw sh">🛡️ Kalkan</span>' : '') + (G.star > 0 ? '<span class="pw st">⭐ x2 · ' + Math.ceil(G.star) + ' sn</span>' : '');
+}
+/* Seri ödülleri: her 25 doğru notada 8 sn yıldız (puan x2); her 10 notada kalkan (yoksa) */
+function streakReward() {
+  if (G.combo % 25 === 0) { G.star = 8; banner('⭐ Yıldız!<small>' + G.combo + ' nota üst üste · 8 saniye puanlar x2</small>', 1600); }
+  else if (G.combo % 10 === 0 && !G.shield) { G.shield = true; banner('🛡️ Kalkan!<small>' + G.combo + ' nota üst üste · bir çarpmayı karşılar</small>', 1600); }
+  else return;
+  [0, 2, 4, 7].forEach((d, i) => tone(noteHz(Math.min(d, G.nNotes - 1)) * 2, 0.15, 'triangle', 0.035, 0, i * 0.06));
+  updatePowers();
 }
 let bannerT = null;
 function banner(html, ms = 2200) {
@@ -364,7 +398,12 @@ function banner(html, ms = 2200) {
 }
 function hurt() {
   if (P.inv > 0 || G.state !== 'play') return;
-  G.hearts--; P.inv = 2; G.shake = 0.35; G.flash = 0.5; G.combo = 0; updateHearts();
+  if (G.shield) {                                     // kalkan çarpmayı karşılar: can ve seri korunur
+    G.shield = false; P.inv = 1.2; G.shake = 0.15; updatePowers();
+    burst(G.x, yOf(P.d), '#7fe3ff', 22); floatText(G.x, yOf(P.d) - 34, 'Kalkan korudu!', '#7fe3ff');
+    tone(660, 0.2, 'triangle', 0.04, 330); return;
+  }
+  G.hearts--; P.inv = 2; G.shake = 0.35; G.flash = 0.5; G.combo = 0; updateHearts('hit');
   tone(180, 0.25, 'square', 0.04, 70);
   if (navigator.vibrate) try { navigator.vibrate(80); } catch (e) {}
   if (G.hearts <= 0) gameOver();
@@ -393,7 +432,8 @@ function update(dt) {
   if (cur && cur !== G.curSong) { G.curSong = cur; if (!demo) banner('♪ ' + cur.name + '<small>' + (G.songsDone ? 'hazır mısın?' : 'notaları takip et, söyle!') + '</small>', 1800); }
   if (cur) G.speed += (cur.speed - G.speed) * Math.min(1, dt * 0.8);
   G.x += G.speed * dt;
-  P.inv = Math.max(0, P.inv - dt); G.shake = Math.max(0, G.shake - dt); G.flash = Math.max(0, G.flash - dt);
+  P.inv = Math.max(0, P.inv - dt);
+  if (G.star > 0) { const was = Math.ceil(G.star); G.star = Math.max(0, G.star - dt); if (!demo && Math.ceil(G.star) !== was) updatePowers(); } G.shake = Math.max(0, G.shake - dt); G.flash = Math.max(0, G.flash - dt);
   P.squash = Math.max(0, P.squash - dt * 4);
 
   // fizik
@@ -419,16 +459,16 @@ function update(dt) {
     for (const h of G.hangs) if (Math.abs(h.x - G.x) < 60 && circleRect(G.x, py, R * 0.82, h.x - h.w / 2, -2000, h.x + h.w / 2, yOf(h.bot))) { hurt(); break; }
     for (const g of G.gates) {
       if (Math.abs(g.x - G.x) > g.w / 2 + R * 0.4) continue;
-      const o = openSpan(g.d);
+      const o = openSpan(g.d, g.cents);
       if (py < o.top || py > o.bot) { hurt(); if (G.state === 'play') floatText(G.x, py - 30, NOTE_NAMES[g.d] + ' söyle!', COLORS[g.d]); break; }
     }
   }
   for (const h of G.hoops) {
     if (h.done || G.x < h.x) continue;
     h.done = true; if (demo) continue;
-    const o = openSpan(h.d);
+    const o = openSpan(h.d, h.cents);
     if (py >= o.top && py <= o.bot) {
-      const pts = 50 * Math.min(4, 1 + Math.floor(G.combo / 8)); G.score += pts;
+      const pts = 50 * Math.min(4, 1 + Math.floor(G.combo / 8)) * (G.star > 0 ? 2 : 1); G.score += pts;
       burst(h.x, yOf(h.d), '#ffe066', 18); floatText(h.x, yOf(h.d) - 40, 'Çember! +' + pts, '#ffe066');
       tone(noteHz(h.d) * 2, 0.35, 'triangle', 0.03); tone(noteHz(h.d) * 3, 0.35, 'sine', 0.02, 0, 0.08);
     }
@@ -449,8 +489,14 @@ function update(dt) {
       c.taken = true; if (demo) continue;
       const perfect = c.best <= DF().tol / 2;
       G.combo++; G.bestCombo = Math.max(G.bestCombo, G.combo); G.notes++; c.song.got++;
-      const mult = Math.min(4, 1 + Math.floor(G.combo / 8));
+      const mult = Math.min(4, 1 + Math.floor(G.combo / 8)) * (G.star > 0 ? 2 : 1);
       const pts = (perfect ? 25 : 10) * mult; G.score += pts;
+      streakReward();
+      if (c.heart) {
+        if (G.hearts < MAX_HEARTS) { G.hearts++; updateHearts('gain'); floatText(c.x, yOf(c.d) - 46, '+1 ❤', '#ff6b8b'); }
+        else { G.score += 100; floatText(c.x, yOf(c.d) - 46, '❤ +100', '#ff6b8b'); }
+        burst(c.x, yOf(c.d), '#ff6b8b', 16); tone(noteHz(c.d) * 2, 0.4, 'sine', 0.035); tone(noteHz(c.d) * 2.5, 0.4, 'sine', 0.02, 0, 0.1);
+      }
       if (perfect) { G.perfect++; c.song.perfect++; }
       burst(c.x, yOf(c.d), COLORS[c.d], perfect ? 14 : 8);
       floatText(c.x, yOf(c.d) - 24, (perfect ? 'Tam! +' : '+') + pts, perfect ? '#fff' : COLORS[c.d]);
@@ -467,7 +513,7 @@ function update(dt) {
     G.songsDone++;
     const bonus = stars * 150; G.score += bonus;
     let extra = '';
-    if (stars >= 2 && G.hearts < 3) { G.hearts++; updateHearts(); extra = ' · +1 ❤'; }
+    if (stars >= 2 && G.hearts < MAX_HEARTS) { G.hearts++; updateHearts('gain'); extra = ' · +1 ❤'; }
     banner((stars ? '★'.repeat(stars) + '<span style="opacity:.3">' + '★'.repeat(3 - stars) + '</span>' : 'Devam!') + '<small>' + s.name + ' · %' + Math.round(acc * 100) + ' isabet · +' + bonus + extra + '</small>', 2600);
     if (stars) [0, 2, 4, 7].forEach((d, i) => tone(noteHz(Math.min(d, G.nNotes - 1)) * 2, 0.18, 'triangle', 0.04, 0, i * 0.09));
   }
@@ -516,8 +562,8 @@ function buildSkyline() {
 function rr(x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
 const sx = wx => wx - G.x + PX;
 /* Kapı/çember açıklığı: notanın ±gate cent'i (kuşun merkezi bu aralıkta olmalı) */
-function openSpan(d) {
-  const g = DF().gate / 100;
+function openSpan(d, cents = DF().gate) {
+  const g = cents / 100;
   return { top: yOf(relToDeg(SEMIS[d] + g, G.nNotes, false)), bot: yOf(relToDeg(SEMIS[d] - g, G.nNotes, false)) };
 }
 
@@ -605,7 +651,7 @@ function draw() {
   // nota kapıları
   for (const g of G.gates) {
     const x = sx(g.x); if (x < -60 || x > VW + 60) continue;
-    const o = openSpan(g.d), top = o.top - R, bot = o.bot + R, col = COLORS[g.d], w = g.w;
+    const o = openSpan(g.d, g.cents), top = o.top - R, bot = o.bot + R, col = COLORS[g.d], w = g.w;
     const wall = (y0, y1) => { if (y1 <= y0) return; ctx.fillStyle = '#5a3fa6'; ctx.fillRect(x - w / 2, y0, w, y1 - y0);
       ctx.fillStyle = '#46308a'; for (let y = Math.ceil(y0 / 14) * 14; y < y1; y += 14) ctx.fillRect(x - w / 2, y, w, 3);
       ctx.globalAlpha = 0.6; ctx.fillStyle = col; ctx.fillRect(x - w / 2, y0, 3, y1 - y0); ctx.fillRect(x + w / 2 - 3, y0, 3, y1 - y0); ctx.globalAlpha = 1; };
@@ -617,7 +663,7 @@ function draw() {
   }
   const hoopDraw = front => { for (const h of G.hoops) {
     const x = sx(h.x); if (x < -40 || x > VW + 40) continue;
-    const o = openSpan(h.d), cy = (o.top + o.bot) / 2, ry = (o.bot - o.top) / 2 + R;
+    const o = openSpan(h.d, h.cents), cy = (o.top + o.bot) / 2, ry = (o.bot - o.top) / 2 + R;
     ctx.save(); ctx.strokeStyle = h.done ? '#ffffff55' : '#ffd84d'; ctx.lineWidth = 6; ctx.shadowColor = '#ffd84d'; ctx.shadowBlur = h.done ? 0 : 12;
     ctx.beginPath(); ctx.ellipse(x, cy, 11, ry, 0, front ? Math.PI / 2 : -Math.PI / 2, front ? Math.PI * 1.5 : Math.PI / 2); ctx.stroke(); ctx.restore();
   } };
@@ -639,7 +685,11 @@ function draw() {
     ctx.shadowColor = COLORS[c.d]; ctx.shadowBlur = c === next ? 22 : 10;
     ctx.fillStyle = COLORS[c.d]; ctx.beginPath(); ctx.arc(x, y, r, 0, 6.28); ctx.fill(); ctx.shadowBlur = 0;
     ctx.fillStyle = '#ffffff66'; ctx.beginPath(); ctx.arc(x - r * 0.3, y - r * 0.35, r * 0.35, 0, 6.28); ctx.fill();
-    ctx.fillStyle = '#1b0f35'; ctx.font = '700 ' + Math.round(r * 1.2) + 'px system-ui'; ctx.textAlign = 'center'; ctx.fillText('♪', x, y + 1);
+    if (c.heart) { // can notası: notanın rengi + kalp
+      ctx.save(); ctx.shadowColor = '#ff6b8b'; ctx.shadowBlur = 16; ctx.strokeStyle = '#ff6b8b'; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(x, y, r + 4 + Math.sin(G.t * 6) * 1.5, 0, 6.28); ctx.stroke(); ctx.restore();
+      ctx.save(); ctx.shadowColor = '#ff2d6b'; ctx.shadowBlur = 6; ctx.fillStyle = '#fff'; ctx.font = '700 ' + Math.round(r * 1.3) + 'px system-ui'; ctx.textAlign = 'center'; ctx.fillText('❤', x, y + 2); ctx.restore();
+    } else { ctx.fillStyle = '#1b0f35'; ctx.font = '700 ' + Math.round(r * 1.2) + 'px system-ui'; ctx.textAlign = 'center'; ctx.fillText('♪', x, y + 1); }
     if (c === next && G.state === 'play') { ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.globalAlpha = 0.6 + 0.4 * Math.sin(G.t * 10); ctx.beginPath(); ctx.arc(x, y, r + 6, 0, 6.28); ctx.stroke(); }
     ctx.globalAlpha = c.missed ? 0.2 : 0.85; ctx.fillStyle = '#fff'; ctx.font = '600 10px Fredoka,system-ui'; ctx.fillText(NOTE_NAMES[c.d], x, y + r + 9);
     ctx.globalAlpha = 1;
@@ -670,6 +720,12 @@ function drawHero(x, y, next) {
     ctx.save(); ctx.shadowColor = COLORS[V.lock]; ctx.shadowBlur = 18; ctx.strokeStyle = COLORS[V.lock]; ctx.lineWidth = 3;
     ctx.beginPath(); ctx.arc(0, 0, R + 6 + Math.sin(G.t * 12) * 1.5, 0, 6.28); ctx.stroke(); ctx.restore();
   }
+  if (G.shield && G.state === 'play') { // kalkan baloncuğu
+    ctx.save(); ctx.globalAlpha *= 0.85; const rb = R + 11 + Math.sin(G.t * 5) * 1.5;
+    const gb = ctx.createRadialGradient(-rb * 0.3, -rb * 0.3, rb * 0.2, 0, 0, rb); gb.addColorStop(0, '#ffffff10'); gb.addColorStop(0.85, '#7fe3ff33'); gb.addColorStop(1, '#7fe3ffcc');
+    ctx.fillStyle = gb; ctx.beginPath(); ctx.arc(0, 0, rb, 0, 6.28); ctx.fill(); ctx.restore();
+  }
+  if (G.star > 0 && G.state === 'play') { ctx.save(); ctx.fillStyle = '#ffe066'; for (let i = 0; i < 5; i++) { const a = G.t * 4 + i * 1.2566; ctx.globalAlpha = 0.8; ctx.font = '12px system-ui'; ctx.textAlign = 'center'; ctx.fillText('✦', Math.cos(a) * (R + 14), Math.sin(a) * (R + 14) + 4); } ctx.restore(); }
   if (off) ctx.globalAlpha *= 0.55;
   // gölge
   ctx.save(); ctx.globalAlpha *= 0.3; ctx.fillStyle = '#000'; const gh = Math.max(0.3, 1 - (groundY - R - y) / 300);
