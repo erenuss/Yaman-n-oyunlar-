@@ -1,8 +1,8 @@
 name: doppler-locate
 services:
   engine:
-    build:
-      context: https://github.com/leo-aa88/aerodoppler.git#main
+    # Resmî yayınlanmış sürüm: uzun Docker build yerine hazır bilimsel motor
+    image: ghcr.io/leo-aa88/aerodoppler:v0.2.10
     ports:
       - "127.0.0.1:8000:8000"
     volumes:
@@ -10,6 +10,7 @@ services:
     environment:
       AERODOPPLER_OFFLINE: "false"
       AERODOPPLER_MAX_UPLOAD_MB: "2048"
+      AERODOPPLER_MAX_CONCURRENT_JOBS: "2"
     restart: unless-stopped
   web:
     image: nginx:alpine

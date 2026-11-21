@@ -1,0 +1,31 @@
+{
+  "name": "DOPPLER / LOCATE — Cloud Lab",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu-24.04",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+  },
+  "postStartCommand": "bash .devcontainer/doppler-locate/start.sh",
+  "forwardPorts": [
+    7070
+  ],
+  "portsAttributes": {
+    "7070": {
+      "label": "DOPPLER / LOCATE — Uygulama",
+      "onAutoForward": "openBrowserOnce",
+      "visibility": "private",
+      "protocol": "http"
+    }
+  },
+  "hostRequirements": {
+    "cpus": 2,
+    "memory": "8gb",
+    "storage": "32gb"
+  },
+  "customizations": {
+    "codespaces": {
+      "openFiles": [
+        "doppler-locate/README.md"
+      ]
+    }
+  }
+}
