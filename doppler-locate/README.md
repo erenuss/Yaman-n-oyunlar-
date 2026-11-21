@@ -1,80 +1,40 @@
-## LocateVideo'yu GitHub Pages üzerinden mevcut Codespace ile paylaşmak
-
-**Ayrı sunucu kurmaya gerek yok.** Bu repodaki statik Pages ekranı mevcut `effective-garbanzo` Codespace'inin **7070** portuna bağlanacak şekilde hazırlandı:
-
-- Paylaşım bağlantısı: https://erenuss.github.io/Yaman-n-oyunlar-/locatevideo/
-- Mevcut analiz motoru: https://effective-garbanzo-xjv9wp7g6w9264vp-7070.app.github.dev/
-- Motorun çalışması için Codespace açık olmalı.
-- VS Code **Bağlantı Noktaları / Ports** sekmesinde **7070 → sağ tık → Port Visibility → Public** yapılmalı. **8000 Private kalmalı.**
-- Mevcut Codespaces terminalinden bir kez `git pull && docker compose up -d --force-recreate web` çalıştırılmalı (Terminal halen `doppler-locate` klasöründeyse). Başka dizindeysen `cd doppler-locate && git pull && docker compose up -d --force-recreate web`.
-- Pages ekranında üstte **Motor bağlı** görünüyorsa tarayıcıdan upload ve analiz API'si Codespaces'e bağlanıyor. Bu, gerçek bir Doppler konum tahmininin başarıyla tamamlandığı anlamına gelmez; ayrıca gerçek kayıt testleri gerekir.
-
-**Sınırlar:** Bu geçici bir paylaşılabilir demo. Codespaces hareketsizlik süresi sonunda kapanır ve hizmet durur. Public port herhangi bir ziyaretçinin API'ye erişmesine yol açar. Nginx'te 256 MB video limiti ve temel yükleme/ithalat istek limitleri var, ancak kullanıcı bazında güvenli dosya izolasyonu ve kimlik doğrulama yok. Tanımadığın çok sayıda kişiyle paylaşılacak üretim sistemi olarak kullanılmamalı; Codespaces ücretsiz saat ve disk kotası tüketilir.
-
----
-
 # LocateVideo
 
-## Yeni kullanıcı akışı: Önce sadece videonu yükle
+[Fotoğraf veya video seçerek başla](https://erenuss.github.io/Yaman-n-oyunlar-/locatevideo/). Aynı arayüz GitHub Pages ve mevcut Docker kurulumunda çalışır.
 
-1. [LocateVideo](https://erenuss.github.io/Yaman-n-oyunlar-/locatevideo/) adresinden video veya ses dosyasını seç ve analiz izni ver.
-2. Dosya mevcut Codespaces motoruna yüklenir; ses ayrıştırma ve Doppler geçiş tespiti **çekim tarihi, saat veya bölge sorulmadan** otomatik yapılır.
-3. Kullanılabilir uçak sesi bulunmazsa sistem bir konum uydurmaz.
-4. Uçak geçişi varsa tarih (UTC) ve olası şehir/bölge sorulur. **Tek geçişte ayrıca çekim başlangıç saati** gerekir. En az iki bağımsız geçiş bulunursa saat olmadan arama denenebilir.
-5. MP4/MOV başlığında oluşturulma zamanı bulunursa tarih ve saat önerilir, ancak bu her zaman gerçek çekim zamanı değildir; doğrulamak gerekir. GPS metadata'sı otomatik konum cevabı olarak kullanılmaz.
-6. Kullanıcı beş hazır şehirden birini seçebilir veya serbest şekilde başka şehir/semt yazabilir. Coğrafi bölge adını OpenStreetMap Nominatim üzerinden çözümleme yalnızca konum araması başlatıldığında yapılır.
-7. Uçuş arşivini indirme onayından sonra olası konumlar hesaplanır. Bunlar **doğrulanmış GPS adresleri veya kalibre edilmiş olasılıklar değildir**.
+| İpucu | Nasıl okunur | Haritada ne gösterilir? |
+| --- | --- | --- |
+| Dosyada kayıtlı GPS | Fotoğraf EXIF GPS, MP4/MOV konum atomları ve QuickTime ISO 6709 | Dosyaya yazılmış koordinat. Düzenlenmiş dosyalarda değişmiş olabilir. |
+| Tabela ve yer adı | Tesseract Türkçe ve İngilizce metni okur. 31.826 yerleşimlik yerel GeoNames dizininde karşılık aranır. | Yerleşim merkezi. Aynı adlı birden çok yer varsa tek nokta işaretlenmez. |
+| Tanınabilir yapı | MobileNet V3 görsel benzerliği ile 46 halka açık yerin 65 referans fotoğrafı karşılaştırılır. Daha geniş arama Google Landmarks V1 kıta modellerini kullanır. | Yapının konumu. Kameranın tam olarak durduğu yer farklı olabilir. |
+| Uçak sesi | YAMNet cihazda kısa ses aralıklarını sınıflandırır. Kullanıcı isterse mevcut AeroDoppler sunucusunda geçiş tespiti ve tarihsel uçuş araması başlatılır. | Yalnızca kullanılabilir bir arşiv eşleşmesinde yaklaşık bölge. |
 
-Bu sürüm dünya çapında kör arama yapamaz; uçuşları eşleştirebilmek için gerçek çekim günü ve olası bölge gerekir. 40 saniyeyi aşan, net uçak sesi bulunan videolar mevcut dedektör için daha uygundur. Sunucu Codespaces durursa analiz çevrimdışı kalır.
+Video taraması dosyaya dağılmış en fazla beş kare seçer, birbirine çok benzeyen kareleri eler ve her görsel ipucunun videodaki zamanını gösterir. Dosya adını, dosya sisteminin tarihini, ziyaretçinin IP adresini veya konumunu tahmine katmaz. GPS ve görsel ipuçları farklı yerlere işaret ettiğinde arayüz ikisini de gösterir. GeoJSON dışa aktarımında her geometri kendi kanıt türünü taşır.
 
-Video ve ses dosyalarındaki uçak Doppler eğrilerini tarihsel ADS-B uçuşlarıyla eşleştiren deneysel araştırma uygulaması. Arayüz GitHub Pages'te (önizleme), gerçek fizik hesabı AeroDoppler (MIT) motorunda çalışır.
+## Kullanım ve kapsam
 
-## EN KOLAY: GitHub Codespaces ile bulutta tek tıkla başlat
+- Fotoğraf, video veya ses seçilince analiz başlar. EXIF okunabilen HEIC görselleri desteklenir. Tarayıcı görüntüyü doğal olarak açamazsa HEIC dönüştürücü indirilir. Video oynatma ve sesi yerelde çözebilme, cihazın codec desteğine bağlıdır.
+- Görüntüler, kareler ve OCR metni cihazda işlenir. JS, WASM ve yapay zekâ modelleri ihtiyaç oldukça indirilir. Harita kullanıcı açtığında OpenStreetMap'e istek yapar. Yerel listede bulunmayan tanınmış yapıların adları, harita koordinatı için Wikipedia'da aranabilir.
+- Hızlı analiz bir yer bulamazsa geniş yapı taraması normal bağlantıda başlar. Veri tasarrufu bildiren bağlantılarda düğmeyle başlatılabilir. İlk tam tarama altı bölgesel model için toplam yaklaşık 260 MB indirebilir. İlk güçlü eşleşmede durur; kullanıcı da istediği zaman durdurabilir. Referans benzerliği ve model skorları konum olasılığı olarak sunulmaz.
+- Uçak sesi sınıflandırması sesin duyulduğu yeri vermez. Yerel tarama belleği korumak için en fazla 55 MB dosyada, bilinen süre 10 dakikayı aşmıyorsa, kayda yayılmış en fazla 28 kısa aralığı inceler. Daha büyük dosya, 256 MB sunucu sınırı içinde motorla incelenebilir.
+- Dosya yalnızca **İzin ver ve geçişleri ara** seçildiğinde seçili motor adresine yüklenir. Yeterli Doppler izi bulunursa UTC günü ve olası bölge gerekir. Tek geçiş ayrıca saat gerektirir. Zaman dilimi içeren çekim etiketi UTC'ye çevrilir. MP4 kapsayıcısının oluşturulma zamanı yalnızca bir öneridir. Arşiv indirme ayrı onay gerektirir ve sunucuda yaklaşık 3,5 GB kullanabilir. Sonuç yetersizse uygulama bir alan üretmez.
+- Motorun genel portu paylaşımlı bir demodur. Kullanıcı hesabı, dosya izolasyonu veya otomatik silme garantisi yoktur. GPS, OCR ve yapı analizi Codespaces kapalıyken de çalışır; ilk model indirmeleri internet gerektirir.
 
-**[☁ GitHub'da uygulamayı başlat](https://codespaces.new/erenuss/Yaman-n-oyunlar-?devcontainer_path=.devcontainer%2Fdoppler-locate%2Fdevcontainer.json&quickstart=1)**
+## Motoru çalıştırma
 
-1. GitHub hesabınla giriş yap ve **Create codespace** seç.
-2. Depodaki `.devcontainer/doppler-locate/devcontainer.json` yapılandırması otomatik olarak Docker motorunu başlatmaya çalışır. Hazır olduğunda **DOPPLER / LOCATE — Uygulama** (port **7070**) bağlantısını **Ports** sekmesinden **Open in Browser** ile aç. Otomatik açılabilir.
-3. Açılan uygulamada video yükle ve analiz izni ver. Uçak sesi otomatik aranır; daha sonra yalnızca gerekli tarih, saat ve bölge bilgileri sorulur.
-4. Çekim saati bilinmiyorsa en az **iki farklı uçak geçişi** gerekir. Arama alanını dar tut. Günlük uçuş arşivi **yaklaşık 3,5 GB** indirebilir ve hesaplama uzun sürebilir.
-5. İşin bitince GitHub'da Codespace'i **Stop** yap. Free kişisel GitHub hesaplarında belirli ücretsiz Codespaces kullanım hakkı vardır; kota aşılırsa ücretli kullanımı sen ayrıca açmadıkça her koşulda ücretsiz kalacağı garantisi yok.
+[Mevcut Codespaces yapılandırmasıyla aç](https://codespaces.new/erenuss/Yaman-n-oyunlar-?devcontainer_path=.devcontainer%2Fdoppler-locate%2Fdevcontainer.json&quickstart=1). Pages, varsayılan olarak mevcut effective-garbanzo Codespace'inin 7070 portunu kullanır. Kendi kurulumun için **Nasıl çalışır? → Uçuş motoru bağlantısı** bölümünden adresi değiştirebilirsin. 7070 paylaşımda Public, gelişmiş motor portu 8000 Private kalmalıdır. Codespace durduğunda tarihsel uçuş eşleştirmesi durur.
 
-**Bu, 7/24 herkese açık sunucu değildir.** Codespace kendi hesabında çalışır ve özel port bağlantısı üzerinden açılır. Üçüncü kişilere video analiz erişimi vermez. 2-core/8GB en düşük seçenekte uzun veya büyük uçuş aramalarında bellek/süre yetersizliği yaşanabilir. Kullanım, veri indirme ve doğruluk başarımı henüz canlı olarak test edilmedi.
-
-### Codespaces açıldı ama 7070 başlamadıysa
-
-VS Code terminalinde:
-
-```bash
-cat /tmp/doppler-locate.log
-cd doppler-locate && docker compose ps
-cd doppler-locate && docker compose up -d
-```
-
-Docker imajını GitHub'ın yayınlanmış resmî AeroDoppler **v0.2.10** sürümünden indirir. İlk çalıştırmada imaj ve sonra günlük uçuş arşivi indirmeleri zaman alabilir. `docker compose logs -f` ile sunucu loglarını görüntüleyebilirsin.
-
-## Bilgisayarda ücretsiz çalıştırma
-
-Docker Desktop kuruluysa:
-
-```bash
+```sh
 cd doppler-locate
+git pull --ff-only
 docker compose up -d
 ```
 
-Web arayüzü: http://127.0.0.1:7070. Gelişmiş AeroDoppler arayüzü: http://127.0.0.1:8000.
+Yerel arayüz http://127.0.0.1:7070 adresinde, mevcut gelişmiş motor http://127.0.0.1:8000 adresindedir. GitHub Pages arayüzünü kullanmak için kendi bilgisayarında kurulum gerekmez.
 
-## GitHub Pages
+## Kaynaklar
 
-[Statik arayüzü aç](https://erenuss.github.io/Yaman-n-oyunlar-/doppler-locate/)
-
-Pages tek başına Python motoru çalıştıramaz. Burada yalnızca video ve ses önizlemesi ile tarayıcı ses frekans grafiği vardır. Gerçek analiz için Codespaces veya Docker içinden sunulan **7070 uygulamasını** kullan.
-
-### Kısıtlar / dürüstlük
-- Fizik eşleştirmesi olası konum hipotezleri üretir, kesin adres veya olasılık yüzdesi vermez.
-- Göreli skorlar kalibre olasılık değildir. Özellikle tek uçak geçişinde önemli konum belirsizliği olabilir.
-- Video dosyasının kendisi Codespace içerisine yüklenir, Google/GitHub Pages sunucusuna gönderilmez (Codespaces uygulamasında).
-- Sadece sana ait veya sahibinin açık izni bulunan videoları analiz et.
-- GitHub Pages'te ayrı bir uzak API bağlamak HTTPS, CORS ve sunucu kimlik doğrulaması ister. Korumasız API'yi internete açma.
-
-Kaynak: [AeroDoppler (MIT)](https://github.com/leo-aa88/aerodoppler), uçuş kayıtları [ADSB.lol](https://www.adsb.lol/docs/open-data/historical).
+- [GeoNames cities15000](https://download.geonames.org/export/dump/), [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Yerleşim adları, ülke, yuvarlanmış merkez koordinatları ve nüfus kullanılır. Bazı semt sınıfları çıkarılmış ve bazı alternatif adlar eklenmiştir.
+- Hızlı görsel dizinindeki her referansın özgün Wikimedia dosya adı ve yapı adı [landmarks.json](./assets/landmarks.json) dosyasındadır. Fotoğraflar yeniden dağıtılmaz. Dizin fotoğraflardan çıkarılmış nicemlenmiş MobileNet V3 vektörlerini ve referans yerlerini içerir. Eşleşen sonuç özgün fotoğraf sayfasına bağlantı verir.
+- [MediaPipe Image Embedder](https://ai.google.dev/edge/mediapipe/solutions/vision/image_embedder), [Google Landmarks V1 modelleri](https://www.kaggle.com/models/google/landmarks), [YAMNet](https://github.com/tensorflow/models/tree/master/research/audioset/yamnet), [Tesseract.js](https://github.com/naptha/tesseract.js), [exifr](https://github.com/MikeKovarik/exifr) ve [heic-to](https://github.com/hoppergee/heic-to). Bölgesel modellerin sabit sürüm kopyası [buradadır](https://github.com/puzzleleaf/flutter_tflite_landmark_classifier/tree/ed97ba40e61458e1f0309e8bc5c488866e5e68d0/assets/models).
+- [AeroDoppler](https://github.com/leo-aa88/aerodoppler), [ADSB.lol arşivi](https://www.adsb.lol/docs/open-data/historical/), [OpenStreetMap](https://www.openstreetmap.org/copyright).

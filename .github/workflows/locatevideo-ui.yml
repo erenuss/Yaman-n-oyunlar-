@@ -3,8 +3,8 @@ on:
   workflow_dispatch:
   push:
     paths:
-      - 'doppler-locate/index.html'
-      - 'doppler-locate/app.js'
+      - 'doppler-locate/**'
+      - 'locatevideo/**'
       - '.github/workflows/locatevideo-ui.yml'
       - 'scripts/locatevideo-ui-test.cjs'
 permissions:
@@ -12,12 +12,14 @@ permissions:
 jobs:
   browser-logic:
     runs-on: ubuntu-latest
-    timeout-minutes: 6
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - name: JavaScript syntax check
-        run: node --check doppler-locate/app.js
-      - name: Install isolated DOM test dependency
-        run: npm install --no-save --ignore-scripts --no-audit --no-fund jsdom@26
-      - name: Verify video-first user journey
+      - name: Check JavaScript syntax
+        run: for file in doppler-locate/app.js doppler-locate/lib/*.js; do node --check "$file" || exit 1; done
+      - name: Prepare Chromium controls and media fixtures
+        run: |
+          npm install --no-save --ignore-scripts --no-audit --no-fund playwright-core@1.56.1
+          command -v ffmpeg || (sudo apt-get update -qq && sudo apt-get install -y ffmpeg)
+      - name: Check media location in a real mobile-sized browser
         run: node scripts/locatevideo-ui-test.cjs

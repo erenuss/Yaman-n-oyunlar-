@@ -1,196 +1,226 @@
-'use strict';
+import {mediaKind,readMetadata,getFrames} from './lib/media.js';
+import {getIndex,readPlaceNames,nearest,distance,country,landmarkPlace,fold} from './lib/places.js';
+import {readText,matchGallery,wideLandmarks,regionOrder,aircraftSound} from './lib/recognition.js';
+import {initFlight,resetFlight,updateFlightHints} from './lib/flights.js';
+
 const $=id=>document.getElementById(id);
-const DEFAULT_CODESPACE_API='https://effective-garbanzo-xjv9wp7g6w9264vp-7070.app.github.dev';
-const REGIONS={istanbul:[28.70,40.78,29.48,41.28],ankara:[32.55,39.70,33.18,40.17],izmir:[26.77,38.18,27.48,38.67],manisa:[27.15,38.35,28.75,39.05],antalya:[30.40,36.71,31.20,37.19]};
-const TERMINAL=new Set(['succeeded','abstained','failed','cancelled','interrupted']);
-let file=null,mediaUrl=null,apiRoot='',apiReady=false,busy=false,ctx=null,analyser=null,source=null,visualLoop=null,results=null,map=null;
-let recordingId=null,foundEvents=[],inspectionComplete=false;
-function status(t,bad=false){$('status').textContent=t;$('status').classList.toggle('error',bad)}
-function setEngine(text,ready){apiReady=ready;$('engine-status').textContent=text;$('engine-status').className='pill '+(ready?'online':'offline');readyButton()}
-function readyButton(){$('locate').disabled=busy||!apiReady||!file||!inspectionComplete||!recordingId||!foundEvents.length||!$('region').value||($('region').value==='custom'&&!$('place-query').value.trim()&&!['west','south','east','north'].every(id=>$(id).value.trim()))||!$('utc-date').value||!$('permission').checked||!$('download-consent').checked||(foundEvents.length===1&&$('clock').value!=='known')||($('clock').value==='known'&&!$('utc-time').value);}
-function base(){return $('api-url').value.trim().replace(/\/$/,'')}
-function errorText(e){return e?.detail?.message||e?.detail||e?.error?.message||e?.message||String(e)}
-async function req(path,opts={}){let r;try{r=await fetch(apiRoot+path,{cache:'no-store',...opts})}catch(e){throw Error('Analiz motoruna erişilemiyor. Sunucu çevrimiçi, HTTPS ve CORS ayarları uygun olmalı.')}
-let data;try{data=await r.json()}catch(e){data=await r.text().catch(()=>null)}if(!r.ok)throw Error(String(errorText(data))+' (HTTP '+r.status+')');return data}
-async function post(path,obj){return req(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(obj)})}
-const sleep=ms=>new Promise(r=>setTimeout(r,ms));
-async function job(raw,label){const id=raw?.job_id||raw?.job?.job_id||raw?.id;if(!id){if(raw?.outcome==='exists')return raw;throw Error(label+': iş kimliği alınamadı')}for(;;){const j=await req('/api/jobs/'+encodeURIComponent(id));status(label+' · '+(j.stage||j.status)+'\n'+(j.progress?.message||'Uçuş arşivi ve hesaplama işlemi uzun sürebilir.'));if(TERMINAL.has(j.status)){if(j.status==='succeeded'||j.status==='abstained')return j;throw Error(label+' · '+errorText(j.error))}await sleep(3500)}}
-function stage(n){for(const d of document.querySelectorAll('.step')){const i=+d.dataset.i;d.classList.toggle('active',i===n);d.classList.toggle('done',i<n);d.querySelector('i').textContent=i<n?'✓':i===n?'◌':'○'}}
-function box(){const a=$('region').value==='custom'?['west','south','east','north'].map(id=>+$ (id).value):REGIONS[$('region').value];if(!a||a.some(x=>!Number.isFinite(x))||a[0]>=a[2]||a[1]>=a[3]||a[0]<-180||a[2]>180||a[1]<-90||a[3]>90)throw Error('Bölge koordinatları geçersiz');return {west:a[0],south:a[1],east:a[2],north:a[3]}}
-async function resolveBox(){
- if($('region').value!=='custom')return box();
- const q=$('place-query').value.trim();
- if(!q)return box();
- status('Belirttiğin şehir/bölgenin sınırları bulunuyor…');
- let list;
- try{
-   const url='https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&accept-language=tr&q='+encodeURIComponent(q);
-   const response=await fetch(url,{headers:{'Accept':'application/json'}});
-   if(!response.ok)throw Error('HTTP '+response.status);
-   list=await response.json();
- }catch(e){throw Error('Bölge aranamadı ('+errorText(e)+'). Şehir adını kontrol et veya gelişmiş koordinat gir.');}
- if(!Array.isArray(list)||!list.length)throw Error('“'+q+'” bulunamadı. Şehir, ilçe ve ülkeyi birlikte yazmayı dene.');
- const b=list[0].boundingbox;
- if(!Array.isArray(b)||b.length!==4)throw Error('Bölge koordinatları alınamadı.');
- let [south,north,west,east]=b.map(Number);
- if([south,north,west,east].some(x=>!Number.isFinite(x)))throw Error('Bölge sınırları geçersiz.');
- // Çok küçük yerleşimler için ses eşleştirmesine yeterli arama alanı bırak.
- const lat=(south+north)/2,lon=(west+east)/2;
- if(north-south<0.10){south=lat-0.05;north=lat+0.05;}
- if(east-west<0.10){west=lon-0.05;east=lon+0.05;}
- south=Math.max(-90,south);north=Math.min(90,north);west=Math.max(-180,west);east=Math.min(180,east);
- if(south>=north||west>=east)throw Error('Arama koordinatları geçersiz.');
- return {south,north,west,east};
+const el=(tag,text,cls)=>{const e=document.createElement(tag);if(text!=null)e.textContent=text;if(cls)e.className=cls;return e;};
+let current=null;
+function timeLabel(seconds) {
+  if(seconds==null)return 'Fotoğraf';
+  const s=Math.floor(seconds);return Math.floor(s/60)+':'+String(s%60).padStart(2,'0');
 }
-async function connect(){const v=base();if(v&&!/^https:\/\//i.test(v)&&!/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(v)){setEngine('Güvensiz sunucu adresi',false);$('connection-detail').textContent='Uzak motor bağlantısı HTTPS olmalıdır.';return}
-apiRoot=v;try{const h=await req('/health');setEngine('Motor bağlı · '+(h.version||'API'),true);$('connection-detail').textContent='Bağlantı başarılı. Analiz için dosya yüklenebilir.';$('pages-warning').hidden=true;if(file&&$('permission').checked&&!inspectionComplete&&!recordingId&&!busy)inspect();if(v)localStorage.setItem('locatevideo-api-url',v)}catch(e){setEngine('Codespaces bağlantısı yok',false);$('connection-detail').textContent=errorText(e);if(location.hostname.endsWith('github.io'))$('pages-warning').hidden=false;if(location.hostname.endsWith('github.io'))$('connection-detail').textContent='Codespaces motoruna ulaşılamıyor. GitHub Codespaces açık olmalı, 7070 portunu Public yapmalısın. Codespace uyuduysa tekrar başlat.'}}
-
-function useFile(f){
- if(!f||busy)return;
- if(f.size>256*1024*1024){status('Maksimum video boyutu 256 MB. Daha küçük bir dosya seç.',true);return;}
- file=f;recordingId=null;foundEvents=[];inspectionComplete=false;results=null;
- $('file-name').textContent=f.name;
- $('media-info').textContent=(f.size/1024/1024).toFixed(1)+' MB · Video hazır';
- if(mediaUrl)URL.revokeObjectURL(mediaUrl);
- mediaUrl=URL.createObjectURL(f);
- const isVideo=f.type.startsWith('video/')||/\.(mp4|mov|webm)$/i.test(f.name);
- const media=$(isVideo?'video':'audio');
- $('video').hidden=!isVideo;$('audio').hidden=isVideo;media.src=mediaUrl;
- $('media-wrap').hidden=false;$('analysis-panel').hidden=false;
- $('followup').hidden=true;$('results').hidden=true;$('events').hidden=true;
- $('utc-date').value='';$('utc-time').value='';$('region').value='';
- $('clock').value='unknown';$('time-fields').hidden=true;$('place-query').value='';$('date-hint').textContent='Dosyadan tarih bulunamazsa gerçek çekim tarihini yaz.';stage(0);readyButton();
- if(!apiReady){status('Dosya seçildi ama analiz motoru çevrimdışı. Bağlanınca analiz başlatılabilir.',true);return;}
- if(!$('permission').checked){status('Videonun analizine izin verdiğini onayla. Ardından uçak sesi otomatik aranacak.');return;}
- inspect();
+function set(s,id,text) {if(current===s) $(id).textContent=text;}
+function link(label,url) {const a=el('a',label);a.href=url;a.target='_blank';a.rel='noopener noreferrer';return a;}
+function showMap(p,zoom) {
+  const dy=zoom>=15?.007:zoom>=11?.11:.18, dx=dy/Math.max(.15,Math.cos(p.lat*Math.PI/180));
+  const bbox=[p.west??Math.max(-180,p.lon-dx),p.south??Math.max(-85,p.lat-dy),p.east??Math.min(180,p.lon+dx),p.north??Math.min(85,p.lat+dy)];
+  const params=new URLSearchParams({bbox:bbox.join(','),layer:'mapnik'});
+  if(!('west' in p))params.set('marker',p.lat+','+p.lon);
+  $('map').src='https://www.openstreetmap.org/export/embed.html?'+params;$('map-wrap').hidden=false;
 }
-
-async function videoContainerDate(f){
- // MP4/MOV: mvhd atom timestamp (not reliable proof of actual capture time).
- if(!/\.(mp4|mov|m4v)$/i.test(f.name))return null;
- const str=(bytes,i,n)=>String.fromCharCode(...bytes.slice(i,i+n));
- let pos=0;
- for(let k=0;k<100&&pos+8<=f.size;k++){
-   const head=new Uint8Array(await f.slice(pos,pos+16).arrayBuffer());
-   const h=new DataView(head.buffer);
-   let len=h.getUint32(0),type=str(head,4,4),offset=8;
-   if(len===1){if(head.length<16)return null;len=h.getUint32(8)*4294967296+h.getUint32(12);offset=16;}
-   else if(len===0)len=f.size-pos;
-   if(!Number.isSafeInteger(len)||len<offset||pos+len>f.size)return null;
-   if(type==='moov'){
-     const part=new Uint8Array(await f.slice(pos+offset,Math.min(pos+len,pos+offset+512*1024)).arrayBuffer());
-     let n=0;
-     while(n+32<=part.length){
-       const size=new DataView(part.buffer,part.byteOffset+n).getUint32(0);
-       if(size<8||n+size>part.length)break;
-       if(str(part,n+4,4)==='mvhd'){
-         const version=part[n+8],dv=new DataView(part.buffer,part.byteOffset+n+12);
-         const seconds=version===1?dv.getUint32(0)*4294967296+dv.getUint32(4):dv.getUint32(0);
-         const date=new Date((seconds-2082844800)*1000);
-         return Number.isFinite(date.getTime())&&date.getTime()>Date.UTC(1990,0,1)&&date.getTime()<Date.now()+86400000?date:null;
-       }
-       n+=size;
-     }
-     return null;
-   }
-   pos+=len;
- }
- return null;
+function card(name,kind,message,p,zoom=14) {
+  const article=el('article',null,'candidate');
+  article.append(el('p',kind,'evidence'),el('h3',name),el('p',message));
+  if(Number.isFinite(p?.lat)&&Number.isFinite(p?.lon)) {
+    const button=el('button','Haritayı göster','text-btn');button.type='button';button.onclick=()=>showMap(p,zoom);
+    const url='https://www.openstreetmap.org/'+('west' in p?'':'?mlat='+p.lat+'&mlon='+p.lon)+'#map='+zoom+'/'+p.lat+'/'+p.lon;
+    article.append(button,link('Haritada aç',url));
+  }
+  return article;
 }
-async function inspect(){
- if(busy||!file||!apiReady||!$('permission').checked)return;
- busy=true;$('file').disabled=true;readyButton();
- try{
-   stage(1);status('Video inceleniyor, varsa kayıt tarihi okunuyor…');
-   const embedded=await videoContainerDate(file).catch(()=>null);
-   if(embedded){
-     $('utc-date').value=embedded.toISOString().slice(0,10);
-     $('utc-time').value=embedded.toISOString().slice(0,19);
-     $('date-hint').textContent='Dosyanın MP4/MOV oluşturulma tarihinden önerildi. Yeniden kaydedildiyse yanlış olabilir; gerçek çekim tarihini doğrula.';
-   }
-   status('Video yükleniyor ve ses ayrıştırılıyor…');
-   const form=new FormData();
-   form.append('file',file,file.name);
-   form.append('owner_permission_confirmed','true');
-   // Tarih/konum ilk ses tespitinde gerekli değildir.
-   const upl=await req('/api/recordings',{method:'POST',body:form});
-   let rid=upl.recording?.id||upl.recording_id;
-   if(!rid){const j=await job(upl,'Ses ayrıştırma');rid=j.result?.recording_id||j.recording_id;}
-   if(!rid)throw Error('Video kayıt kimliği alınamadı.');
-   recordingId=rid;stage(2);
-   status('Şimdi uçak sesi ve Doppler frekans değişimi aranıyor…');
-   const det=await post('/api/recordings/'+encodeURIComponent(rid)+'/events/detect',{threshold_z:2.5,min_duration_s:40,save:true});
-   if(det.job_id||det.id)await job(det,'Uçak sesi tespiti');
-   const got=await req('/api/recordings/'+encodeURIComponent(rid)+'/events');
-   const evs=(got.events||[]).filter(e=>['plausible_doppler','weak_doppler'].includes(e.assessment?.label))
-     .sort((a,b)=>(b.detection_quality||0)-(a.detection_quality||0));
-   const unique=[];
-   for(const e of evs){
-      const mid=(e.audio_start_s+e.audio_end_s)/2;
-      if(!unique.some(x=>Math.abs(mid-(x.audio_start_s+x.audio_end_s)/2)<45))unique.push(e);
-   }
-   foundEvents=unique.slice(0,8);
-   $('events').hidden=false;
-   $('events').textContent=foundEvents.length+' bağımsız uçak Doppler izi bulundu.';
-   if(!foundEvents.length){
-     status('Videoda güvenilir bir uçak Doppler izi bulunamadı. Daha uzun ve uçak sesinin belirgin olduğu bir video deneyebilirsin. Konum üretilmedi.',true);
-     return;
-   }
-   inspectionComplete=true;
-   $('followup').hidden=false;
-   if(foundEvents.length===1){
-     $('clock').value='known';$('time-fields').hidden=false;
-     status('1 uçak sesi bulundu. Çekim tarihi, UTC saati ve olası şehir/bölge gerekiyor. Video içinden önerilen tarih/saat varsa doğruluğunu kontrol et.');
-   }else{
-     status(foundEvents.length+' uçak sesi bulundu. Çekim saati olmadan arama denenebilir. Yalnızca çekim tarihi ve olası şehir/bölge gerekiyor.');
-   }
-   $('followup').scrollIntoView({behavior:'smooth',block:'nearest'});
- }catch(e){status('Video analizi: '+errorText(e),true);}
- finally{busy=false;$('file').disabled=false;readyButton();}
+function appendLandmarks(s,matches) {
+  for(const candidate of matches) {
+    const existing=s.landmarks.find(x=>fold(x.name)===fold(candidate.name));
+    if(existing){if(!existing.times.includes(candidate.time)) existing.times.push(candidate.time);continue;}
+    s.landmarks.push({...candidate,times:[candidate.time]});
+  }
+}
+function render(s) {
+  if(current!==s)return;
+  const gps=s.meta?.gps, marks=s.landmarks, places=s.places, areas=s.flightAreas, items=[];
+  let title='Kayıt inceleniyor',summary='Bir ipucu bulunduğunda burada görünecek.';
+  if(gps) {
+    const name=s.near? s.near.name+', '+country(s.near.code) : 'Dosyadaki GPS koordinatı';
+    title='Dosyada çekim koordinatı var';
+    summary='Bu nokta medyanın konum etiketinden okundu. Etiket, dosya düzenlenirken değişmiş olabilir.';
+    items.push(card(name,s.meta.source,gps.lat.toFixed(6)+', '+gps.lon.toFixed(6)+(s.near?' · Dizindeki en yakın yerleşim merkezine '+s.near.km.toFixed(1)+' km.':''),gps,16));
+  } else if(marks.length) {
+    title=marks.length===1?marks[0].name:'Görüntüde birden fazla yer tanındı';
+    summary='Harita tanınan yapının yerini gösterir. Çekim noktası yapıdan uzakta olabilir.';
+  } else if(places.length) {
+    title=places.length===1&&!places[0].ambiguous?'Olası şehir: '+places[0].name:'Görüntüde yer adı bulundu';
+    summary='Adaylar görüntüde okunan yazılara dayanıyor. Tabela başka bir yeri de işaret edebilir.';
+  } else if(areas.length) {
+    title='Uçuş kayıtlarıyla uyumlu bölge bulundu';summary='Sonuç, seçilen tarih ve arama bölgesi için bir tahmindir.';
+  } else if(s.done) {
+    title='Konum belirlenemedi'; summary=s.kind==='audio'?'Tek başına ses kaydından çekim yeri çıkarılamadı. Aşağıda uçuş arşiviyle karşılaştırmayı deneyebilirsin.':'İncelenen ipuçları bir yer önermek için yetersiz. Her yöntemin sonucu aşağıda.';
+  }
+  for(const m of marks) {
+    const where=[m.name,m.city].filter(Boolean).join(' · ');
+    const article=card(where,m.method,m.times.map(timeLabel).join(', ')+' · Görüntüdeki yapı.'+(m.lat==null?' Harita konumu doğrulanamadı.':''),m,15);
+    if(m.photo)article.append(link('Referans fotoğraf','https://commons.wikimedia.org/wiki/File:'+encodeURIComponent(m.photo)));
+    items.push(article);
+  }
+  for(const place of places) {
+    const name=place.ambiguous?place.name:place.name+', '+country(place.code);
+    const detail=timeLabel(place.time)+' · “'+place.line+'”'+(place.ambiguous?' · Aynı adlı yerler var: '+[...new Set(place.alternatives)].join(' / ')+'.':' · Harita şehir merkezini gösterir.');
+    items.push(card(name,'Okunan yer adı',detail,place.ambiguous?null:place,11));
+  }
+  for(const a of areas)items.push(card(a.name,'Tarihsel uçuş eşleşmesi','Arama bölgesinde sesle uyumlu yaklaşık alan.',a,10));
+  const supported=marks.find(m=>Number.isFinite(m.lat) && places.some(p=>!p.ambiguous && distance(m,p)<=25));
+  if(!gps && supported) summary+=' Görüntüde okunan yer adı da bu bölgeyle uyumlu.';
+  $('export').hidden=!(gps||marks.some(m=>Number.isFinite(m.lat))||places.some(p=>!p.ambiguous)||areas.length);
+  $('verdict').textContent=title;$('verdict-note').textContent=summary;$('candidates').replaceChildren(...items);
+  const disagree=(a,b,limit)=>Number.isFinite(a?.lat)&&Number.isFinite(b?.lat)&&distance(a,b)>limit;
+  const conflict=marks.some(m=>disagree(m,gps,35)||places.some(p=>!p.ambiguous&&disagree(m,p,75))) ||
+    places.some(p=>!p.ambiguous&&disagree(p,gps,75));
+  $('conflict').hidden=!conflict;
+  if(conflict)$('conflict').textContent='İpuçları farklı yerleri gösteriyor. Kayıt etiketi, görünen yapı ve tabeladaki yer ayrı ayrı gösterildi.';
+  updateFlightHints(s);
+}
+async function metadata(s) {
+  try {
+    s.meta=await readMetadata(s.file,s.kind);if(current!==s)return;
+    if(s.meta.gps) {
+      set(s,'meta-status',s.meta.source+' etiketi bulundu.');render(s);
+      const index=await getIndex().catch(()=>null);if(index)s.near=nearest(s.meta.gps,index);
+    } else set(s,'meta-status','Desteklenen çekim konumu etiketi bulunamadı.');
+  } catch {set(s,'meta-status','Konum etiketi okunamadı.');}
+  render(s);
 }
 
-function liveGraph(){if(!analyser)return;const canvas=$('spectrum'),g=canvas.getContext('2d'),W=canvas.width,H=canvas.height;const d=new Uint8Array(analyser.frequencyBinCount);analyser.getByteFrequencyData(d);g.fillStyle='#0a2029';g.fillRect(0,0,W,H);g.strokeStyle='#244852';g.lineWidth=1;for(let y=25;y<H;y+=40){g.beginPath();g.moveTo(0,y);g.lineTo(W,y);g.stroke()}const lo=80,hi=1600,nyq=ctx.sampleRate/2;let peak=0,peakHz=0;g.beginPath();for(let i=0;i<W;i++){const hz=lo+(hi-lo)*i/(W-1);const idx=Math.min(d.length-1,Math.max(0,Math.round(hz/nyq*d.length)));const v=d[idx];const y=H-12-v/255*(H-25);if(i===0)g.moveTo(i,y);else g.lineTo(i,y);if(v>peak){peak=v;peakHz=Math.round(hz)}}g.lineWidth=2;g.strokeStyle='#8fe8d7';g.stroke();$('peak').textContent=peak>22?'En güçlü bant ≈ '+peakHz+' Hz':'Ses bekleniyor';visualLoop=requestAnimationFrame(liveGraph)}
-async function listen(){const m=$('video').hidden?$('audio'):$('video');if(!ctx){ctx=new(window.AudioContext||window.webkitAudioContext)();analyser=ctx.createAnalyser();analyser.fftSize=8192;analyser.smoothingTimeConstant=.8;source=ctx.createMediaElementSource(m);source.connect(analyser);analyser.connect(ctx.destination)}if(source.mediaElement!==m){source.disconnect();source=ctx.createMediaElementSource(m);source.connect(analyser)}await ctx.resume();await m.play();if(visualLoop)cancelAnimationFrame(visualLoop);liveGraph()}
-
-async function analyze(){
- if(busy||!apiReady||!inspectionComplete||!recordingId||!foundEvents.length)return;
- busy=true;readyButton();$('results').hidden=true;
- try{
-   const b=await resolveBox(),known=$('clock').value==='known',day=$('utc-date').value;
-   if(!day)throw Error('Gerçek UTC çekim tarihi gerekli.');
-   if(!$('region').value)throw Error('Bu motorun uçuş arşivini sorgulaması için şehir/bölge gerekli.');
-   if(foundEvents.length===1&&!known)throw Error('Tek uçak sesiyle çalışabilmek için çekim saati (UTC) de gerekiyor.');
-   const start=known?($('utc-time').value.length===16?$('utc-time').value+':00Z':$('utc-time').value+'Z'):null;
-   const error=+$('time-error').value;
-   if(known&&(!Number.isFinite(error)||error<0||error>86400))throw Error('Saat hata payı geçersiz.');
-   if(known&&start.slice(0,10)!==day)throw Error('UTC günü ve saati uyuşmuyor.');
-   const km2=(b.east-b.west)*(b.north-b.south)*111.195**2*Math.cos((b.north+b.south)*Math.PI/360);
-   if(km2>40000&&!confirm('Seçilen arama alanı çok geniş. Devam edilsin mi?'))return;
-   stage(3);status('Çekim tarihine ait uçuş kayıtları alınıyor ve Doppler iziyle karşılaştırılıyor…');
-   const imp=await post('/api/flight-datasets/import',{provider:'adsblol',date_utc:day,bbox:b,margin_km:15,confirm_download:true,exclude_jets:false});
-   if(imp.outcome!=='exists')await job(imp,'Uçuş kayıtlarını indirme');
-   stage(4);
-   const q={mode:known?'known-time':'unknown-time',recording_id:recordingId,
-     event_ids:foundEvents.map(x=>x.id),bbox:b,national_scale_confirmed:km2>40000,max_cpu_hours:4};
-   if(known){q.start_utc=start;q.start_uncertainty_s=error}else q.date_utc=day;
-   const search=await post('/api/searches',q);
-   const sid=search.id||search.job_id;
-   if(!sid)throw Error('Arama iş kimliği alınamadı.');
-   await job({job_id:sid},'Konum eşleştirmesi');
-   results=await req('/api/searches/'+encodeURIComponent(sid)+'/candidates');
-   renderResults(results,b);stage(5);
-   status('Olası çekim konumları gösteriliyor. Bunlar doğrulanmış GPS konumu değildir.');
- }catch(e){status('Konum araması: '+errorText(e),true);}
- finally{busy=false;readyButton();}
+async function ocr(s,frames) {
+  try {
+    const [lines,idx]=await Promise.all([readText(frames,s.signal,(n,total)=>set(s,'text-status','Yazılar okunuyor · '+n+'/'+total)),getIndex()]);
+    if(current!==s)return;
+    s.places=readPlaceNames(lines,idx);
+    set(s,'text-status',s.places.length?s.places.length+' yer adı adayı bulundu.':lines.length?'Yazılar okundu. Dizinde yeterli bir yer adı eşleşmedi.':'Okunabilir yazı bulunamadı.');
+    const seen=new Set(),list=[];
+    for(const l of lines){const key=fold(l.text);if(!seen.has(key)){seen.add(key);list.push(el('li',timeLabel(l.time)+' · '+l.text));}}
+    $('ocr-lines').replaceChildren(...list.slice(0,25));$('ocr-detail').hidden=list.length===0;
+    render(s);
+  } catch {set(s,'text-status','Yazı okuma tamamlanamadı. Model bağlantısını ve tarayıcı desteğini kontrol et.');}
 }
+async function visual(s,frames) {
+  set(s,'vision-status','Referans fotoğraflarla karşılaştırılıyor…');
+  try {
+    const matches=await matchGallery(frames,s.signal);
+    if(current!==s)return;
+    appendLandmarks(s,matches);
+    s.galleryStatus=matches.length?'Referans fotoğrafla görsel eşleşme bulundu.':'Referans fotoğraflarda güçlü eşleşme bulunamadı.';
+  } catch {s.galleryStatus='Referans modeli bu cihazda çalıştırılamadı.';}
+  set(s,'vision-status',s.galleryStatus);render(s);
+}
+async function sound(s) {
+  try {
+    const media=$('player').querySelector('audio,video');
+    const data=await aircraftSound(s.file,media?.duration,s.signal);
+    if(current!==s)return;
+    if(data.skipped)set(s,'sound-status','Dosya cihazda ses taraması için büyük. İstersen uçuş motorunu kullanabilirsin.');
+    else if(data.unsupported)set(s,'sound-status','Tarayıcı ses kanalını açamadı. Uçuş motoru kaydı ayrıca inceleyebilir.');
+    else if(data.silent)set(s,'sound-status','Örneklenen ses aralıkları sessiz.');
+    else if(data.hits.length)set(s,'sound-status','Uçak sesine benzeyen anlar: '+data.hits.slice(0,5).map(timeLabel).join(', ')+'. Bu ses tek başına bir yer belirtmez.');
+    else set(s,'sound-status','Örneklenen aralıklarda belirgin uçak sesi tanınmadı.');
+  } catch {set(s,'sound-status','Cihazdaki ses analizi tamamlanamadı. Uçuş motoru ayrıca kullanılabilir.');}
+}
+async function runWide(s) {
+  if(current!==s||s.wideCtrl||!s.frames?.length)return;
+  $('wide').hidden=true;$('stop-wide').hidden=false;$('wide-note').hidden=false;
+  $('wide-note').textContent='Bölgesel yapı modelleri sırayla indirilir. Altı model ilk kullanımda toplam yaklaşık 260 MB kullanabilir.';
+  const ctrl=new AbortController();s.wideCtrl=ctrl;
+  const abort=()=>ctrl.abort();s.signal.addEventListener('abort',abort,{once:true});
+  try {
+    const order=regionOrder(s.near?.code||s.places.find(p=>!p.ambiguous)?.code);
+    const outcome=await wideLandmarks(s.frames,order,ctrl.signal,(name)=>set(s,'vision-status','Geniş yapı taraması · '+name),async hits=>{
+      for(const label of new Set(hits.map(h=>h.label))) {
+        const t=new AbortController(),timer=setTimeout(()=>t.abort(),6000);
+        const stop=()=>t.abort();ctrl.signal.addEventListener('abort',stop,{once:true});
+        let place;
+        try {place=await landmarkPlace(label,t.signal);}catch{}finally{clearTimeout(timer);ctrl.signal.removeEventListener('abort',stop);}
+        if(ctrl.signal.aborted||current!==s)return;
+        appendLandmarks(s,hits.filter(h=>h.label===label).map(h=>({name:label,...place,time:h.time,method:'Görsel yapı modeli'})));
+      }
+    });
+    if(current!==s)return;
+    set(s,'vision-status',outcome.matched?'Görsel model bir yapı tanıdı.':outcome.completed+' kıta grubu incelendi. Güçlü bir yapı eşleşmesi bulunamadı.'+(outcome.failed?' Bazı modeller çalıştırılamadı.':''));
+    $('wide').hidden=!outcome.failed;
+  } catch {
+    if(current!==s)return;
+    set(s,'vision-status',ctrl.signal.aborted?'Geniş tarama durduruldu. '+s.galleryStatus:'Geniş tarama bu cihazda tamamlanamadı.');$('wide').hidden=false;
+  } finally {
+    s.signal.removeEventListener('abort',abort);s.wideCtrl=null;
+    if(current===s){$('stop-wide').hidden=true;$('wide-note').hidden=$('wide').hidden;s.done=true;render(s);}
+  }
+}
+async function analyze(s) {
+  const meta=metadata(s);
+  if(s.kind!=='image') void sound(s);
+  if(s.kind==='audio'){await meta;s.done=true;render(s);return;}
+  try {
+    const frames=await getFrames(s.kind,s.url,s.signal,s.file);if(current!==s)return;
+    s.frames=frames.filter(f=>!f.flat);
+    if(s.kind==='image'&&!$('player').querySelector('img')?.naturalWidth && frames[0]) {
+      const image=el('img');image.alt='Seçilen fotoğraf';image.src=frames[0].canvas.toDataURL('image/jpeg',.8);$('player').replaceChildren(image);
+    }
+    set(s,'file-info',s.sizeLabel+(s.kind==='video'?' · '+frames.length+' farklı kare örneklendi.':''));
+    if(!s.frames.length) {
+      set(s,'text-status','Örneklenen görüntü düz renkli veya karanlık.');set(s,'vision-status','Ayırt edilebilir görüntü ayrıntısı yok.');
+    } else {
+      await Promise.allSettled([ocr(s,s.frames),visual(s,s.frames),meta]);
+      if(current!==s)return;
+      const connection=navigator.connection;
+      const metered=connection?.saveData||connection?.type==='cellular'||['2g','slow-2g','3g'].includes(connection?.effectiveType);
+      if(!s.landmarks.length) {
+        $('wide').hidden=false;$('wide-note').hidden=false;
+        $('wide-note').textContent='Geniş yapı taraması ilk kullanımda en fazla yaklaşık 260 MB model indirebilir.';
+        if(!metered&&!s.meta?.gps&&!s.places.some(p=>!p.ambiguous)) {await runWide(s);}
+      }
+    }
+  } catch {
+    set(s,'vision-status','Tarayıcı bu dosyanın görüntüsünü açamadı.');set(s,'text-status','Görüntü açılamadığı için yazılar okunamadı.');
+  }
+  await meta;s.done=true;render(s);
+}
+function useFile(file) {
+  if(!file)return;
+  const kind=mediaKind(file);
+  if(!kind||!file.size) {
+    $('file-error').hidden=false;$('file-error').textContent=!file.size?'Dosya boş. Başka bir kayıt seç.':'Bir fotoğraf, video veya ses dosyası seç.';return;
+  }
+  $('file-error').hidden=true;
+  if(current){current.ctrl.abort();URL.revokeObjectURL(current.url);}
+  const ctrl=new AbortController();
+  const s={file,kind,ctrl,signal:ctrl.signal,meta:null,places:[],landmarks:[],flightAreas:[],done:false,url:URL.createObjectURL(file),sizeLabel:(file.size/1048576).toLocaleString('tr',{maximumFractionDigits:1})+' MB'};
+  current=s;s.changed=()=>render(s);
+  $('workbench').classList.add('active');$('preview').hidden=false;$('report').hidden=false;
+  $('pick-title').textContent='Başka bir kayıt incele';$('pick-button').textContent='Dosyayı değiştir';$('pick-hint').textContent='';
+  $('file-name').textContent=file.name;$('file-info').textContent=s.sizeLabel;
+  const media=el(kind==='image'?'img':kind);media.src=s.url;if(kind==='image')media.alt='Seçilen fotoğraf';else {media.controls=true;media.preload='metadata';media.playsInline=true;}
+  $('player').replaceChildren(media);$('map-wrap').hidden=true;$('map').removeAttribute('src');
+  for(const k of ['wide','stop-wide','wide-note','ocr-detail','conflict']) $(k).hidden=true;
+  for(const k of ['text-row','vision-row'])$(k).hidden=kind==='audio';$('sound-row').hidden=kind==='image';
+  $('meta-status').textContent='Dosya okunuyor…';$('text-status').textContent='Görüntü hazırlanıyor…';$('vision-status').textContent='Görüntü hazırlanıyor…';$('sound-status').textContent='Ses kanalı inceleniyor…';
+  resetFlight(s);render(s);void analyze(s);
+}
+initFlight();
+$('file').addEventListener('change',e=>{useFile(e.target.files?.[0]);e.target.value='';});
+const drop=$('drop-zone');
+for(const event of ['dragover','drop'])drop.addEventListener(event,e=>e.preventDefault());
+drop.addEventListener('dragover',()=>drop.classList.add('drag'));drop.addEventListener('dragleave',()=>drop.classList.remove('drag'));
+drop.addEventListener('drop',e=>{drop.classList.remove('drag');useFile(e.dataTransfer.files?.[0]);});
+$('wide').addEventListener('click',()=>runWide(current));$('stop-wide').addEventListener('click',()=>current?.wideCtrl?.abort());
 
-function renderResults(data,b){$('results').hidden=false;const grade=String(data.confidence_grade||'low');$('verdict').textContent=(data.abstention?.abstained?'Yeterli kanıt yok. ':'')+'Kanıt düzeyi: '+grade+'. Göreli skorlar gerçek olasılık yüzdesi değildir; kesin konum doğrulanmamıştır.';$('candidates').replaceChildren();const list=(data.candidates||[]).slice(0,5);if(!map&&window.L){map=L.map('map');L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap contributors'}).addTo(map)}if(map){map.eachLayer(l=>{if(l instanceof L.CircleMarker)map.removeLayer(l)});map.fitBounds([[b.south,b.west],[b.north,b.east]])}const pins=[];for(const c of list){const a=document.createElement('article');a.className='candidate';const title=document.createElement('strong');title.textContent='Aday #'+c.rank+' · '+Number(c.lat).toFixed(5)+', '+Number(c.lon).toFixed(5);const p=document.createElement('p');p.textContent='Göreli uyum skoru: '+Number(c.score_total).toFixed(3);const link=document.createElement('a');link.textContent='Haritada aç ↗';link.href='https://www.openstreetmap.org/?mlat='+c.lat+'&mlon='+c.lon+'#map=15/'+c.lat+'/'+c.lon;link.target='_blank';link.rel='noopener noreferrer';a.append(title,p,link);$('candidates').append(a);if(map){const mk=L.circleMarker([c.lat,c.lon],{radius:8,color:'#8ef6d4'}).addTo(map);mk.bindPopup(title.textContent);pins.push(mk)}}if(!list.length){$('candidates').textContent='Bu kayıt ve tarihte yeterli eşleşme bulunamadı.'}if(map&&pins.length)map.fitBounds(L.featureGroup(pins).getBounds().pad(.5),{maxZoom:14});if(map)setTimeout(()=>map.invalidateSize(),100);$('results').scrollIntoView({behavior:'smooth'})}
-function exportGeo(){if(!results?.candidates)return;const fc={type:'FeatureCollection',features:results.candidates.filter(c=>Number.isFinite(c.lat)&&Number.isFinite(c.lon)).map(c=>({type:'Feature',geometry:{type:'Point',coordinates:[c.lon,c.lat]},properties:{rank:c.rank,relative_score:c.score_total}})),metadata:{note:'Koordinatlar doğrulanmış konum değildir.'}};const a=document.createElement('a'),u=URL.createObjectURL(new Blob([JSON.stringify(fc,null,2)],{type:'application/geo+json'}));a.href=u;a.download='doppler-konum-adaylari.geojson';a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)}
-function drawPlaceholder(){const canvas=$('spectrum'),g=canvas.getContext('2d');g.fillStyle='#0a2029';g.fillRect(0,0,canvas.width,canvas.height);g.strokeStyle='#284d55';for(let i=0;i<10;i++){const x=i*80;g.beginPath();g.moveTo(x,0);g.lineTo(x,canvas.height);g.stroke()}g.strokeStyle='#6dcfbc';g.lineWidth=2;g.beginPath();for(let i=0;i<canvas.width;i++){const y=155+Math.sin(i*.07)*13+Math.sin(i*.15)*7; i?g.lineTo(i,y):g.moveTo(i,y)}g.stroke();g.fillStyle='#a0bec2';g.font='13px system-ui';g.fillText('Örnek gösterim · video oynatınca canlı spektrum görünür',18,28)}
-window.addEventListener('DOMContentLoaded',async()=>{drawPlaceholder();const hosted=location.hostname.endsWith('github.io');$('pages-warning').hidden=!hosted;
-$('file').addEventListener('change',e=>useFile(e.target.files?.[0]));$('permission').addEventListener('change',()=>{if(file&&$('permission').checked&&apiReady&&!inspectionComplete&&!recordingId&&!busy)inspect();readyButton()});const drop=$('drop-zone');for(const evt of ['dragover','drop'])drop.addEventListener(evt,e=>e.preventDefault());drop.addEventListener('dragover',()=>drop.classList.add('drag'));drop.addEventListener('dragleave',()=>drop.classList.remove('drag'));drop.addEventListener('drop',e=>{drop.classList.remove('drag');useFile(e.dataTransfer?.files?.[0])});
-$('listen').addEventListener('click',()=>listen().catch(e=>status('Ses oynatma: '+errorText(e),true)));
-$('clock').addEventListener('change',()=>{$('time-fields').hidden=$('clock').value!=='known';readyButton()});$('region').addEventListener('change',()=>{$('bounds').hidden=$('region').value!=='custom';readyButton()});$('place-query').addEventListener('input',readyButton);for(const id of ['west','south','east','north'])$(id).addEventListener('input',readyButton);for(const id of ['utc-date','utc-time','download-consent'])$(id).addEventListener('change',readyButton);
-$('locate').addEventListener('click',analyze);$('export').addEventListener('click',exportGeo);$('connect').addEventListener('click',connect);
-if(hosted){$('api-url').value=localStorage.getItem('locatevideo-api-url')||DEFAULT_CODESPACE_API;}
-await connect();if(apiReady&&file&&$('permission').checked&&!inspectionComplete)inspect()});
+$('export').addEventListener('click',()=>{
+  const s=current;if(!s)return;
+  const features=[];
+  function point(p,kind,name,source){
+    if(Number.isFinite(p?.lat)&&Number.isFinite(p?.lon))features.push({type:'Feature',geometry:{type:'Point',coordinates:[p.lon,p.lat]},properties:{kind,name,source}});
+  }
+  point(s.meta?.gps,'embedded_gps','Dosyadaki çekim etiketi',s.meta?.source);
+  for(const m of s.landmarks)point(m,'landmark',m.name,m.method);
+  for(const p of s.places)if(!p.ambiguous)point(p,'city_center',p.name,'OCR');
+  for(const a of s.flightAreas)features.push({type:'Feature',geometry:{type:'Polygon',coordinates:[[[a.west,a.south],[a.east,a.south],[a.east,a.north],[a.west,a.north],[a.west,a.south]]]},properties:{kind:'acoustic_area',name:a.name,source:'AeroDoppler'}});
+  const url=URL.createObjectURL(new Blob([JSON.stringify({type:'FeatureCollection',features},null,2)],{type:'application/geo+json'}));
+  const a=document.createElement('a');a.href=url;a.download='locatevideo-sonuclar.geojson';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+});

@@ -1,39 +1,63 @@
 <!doctype html>
-<html lang="tr"><head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="theme-color" content="#080f1c"><meta name="description" content="Doppler etkisi ile videodaki uçak sesinden konum arama laboratuvarı.">
-<title>LocateVideo · Uçak sesinden konum analizi</title>
-<link rel="stylesheet" href="./style.css">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
-<script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
-<script defer src="./app.js"></script>
-</head><body>
-<div class="glow glow-a"></div><div class="glow glow-b"></div>
-<header class="top"><a class="brand" href="./"><span class="mark">◉</span> LOCATE<span class="brand-slash">/</span>VIDEO</a><nav><a href="../">← Diğer projeler</a><a href="https://github.com/leo-aa88/aerodoppler" target="_blank" rel="noopener">Bilimsel motor ↗</a><span id="engine-status" class="pill">Motor kontrol ediliyor</span></nav></header>
-<main>
-<section class="hero"><div class="micro">✦ AKUSTİK COĞRAFİ KONUM ANALİZİ <span class="label">BETA · RESEARCH</span></div><h1>Videonu yükle.<br><em>Yerini araştıralım.</em></h1><p>Videodaki uçak seslerini otomatik inceleyelim. Doppler izi bulunursa geçmiş uçuşlarla karşılaştıralım. Motorun videodan çıkaramadığı bilgileri yalnızca gerektiğinde soracağız.</p></section>
-<div id="pages-warning" class="notice" hidden><b>LocateVideo · Codespaces motoruna bağlı</b><span>Bu sayfa mevcut Codespaces sunucusunda çalışan Doppler motoruna bağlanır. Gerçek analiz için <strong>Codespace açık ve 7070 portu Public</strong> olmalıdır. Codespace durursa analiz de durur. <a href="https://codespaces.new/erenuss/Yaman-n-oyunlar-?devcontainer_path=.devcontainer%2Fdoppler-locate%2Fdevcontainer.json&quickstart=1" target="_blank" rel="noopener">Codespaces durumunu aç ↗</a></span><a href="#server">Diğer seçenekler ↓</a></div>
-<section class="cols">
-<div class="panel input-panel"><div class="section"><span class="count">01 / BAŞLA</span><h2>Bir video yükle</h2><p>Dosyanı seçtiğinde uçak sesi analizi otomatik başlar. Devam edebilmek için aşağıdaki izin onayı gereklidir; seçtiğin video bu aşamada Codespaces sunucusuna gönderilir.</p></div>
-<label class="check permission-first"><input type="checkbox" id="permission"><span>Bu videonun sahibiyim veya analiz için iznim var.</span></label>
-<label class="drop" id="drop-zone"><input id="file" type="file" accept="video/*,audio/*,.mp4,.mov,.webm,.mp3,.wav,.m4a,.flac"><span class="upload-icon">↥</span><strong id="file-name">Bir video veya ses seç</strong><small>MP4, MOV, WEBM, WAV, MP3, M4A</small><span class="choose">Dosya seç</span></label>
-<div id="media-wrap" class="media-wrap" hidden><video controls playsinline id="video" hidden></video><audio controls id="audio" hidden></audio><p id="media-info"></p></div>
-<div id="followup" hidden><div class="section" style="margin-top:28px"><span class="count">02 / EKSİK BİLGİLER</span><h2>Uçuş rotalarıyla eşleştirmek için</h2><p>Videoda kullanılabilir uçak sesi bulduk. Mevcut algoritmanın gerekli gördüğü iki bilgi daha var. Video metadata’sından güvenilir bir çekim zamanı çıkarılabilirse tarihi doldururuz, ama doğruluğunu kontrol etmelisin.</p></div>
-<div class="fields"><label>Çekim tarihi (UTC) <span class="required">gerekli</span><input id="utc-date" type="date"><small id="date-hint" class="field-help">Dosyadan tarih bulunamazsa sen girmelisin.</small></label><label>Çekim saati (varsa)<select id="clock"><option value="unknown">Bilinmiyor</option><option value="known">Biliyorum (UTC)</option></select></label></div>
-<div class="fields" id="time-fields" hidden><label>Başlangıç saati (UTC)<input id="utc-time" type="datetime-local" step="1"></label><label>Hata payı (saniye)<input id="time-error" type="number" min="0" max="86400" value="10"></label></div>
-<label class="block">Videonun çekilmiş olabileceği şehir veya bölge <span class="required">gerekli</span><select id="region"><option value="" selected>Şehir veya bölge seç</option><option value="istanbul">İstanbul</option><option value="ankara">Ankara</option><option value="izmir">İzmir</option><option value="manisa">Manisa</option><option value="antalya">Antalya</option><option value="custom">Başka şehir / bölge yaz</option></select></label><p class="hint">Bölge hakkında hiçbir fikrin yoksa, bu sürüm bütün dünyayı otomatik tarayamıyor. Rastgele şehir seçmek yanıltıcı sonuç verir.</p>
-<div id="bounds" hidden><label class="block">Şehir veya semt adı<input id="place-query" type="text" autocomplete="off" placeholder="Örn. Roma, İtalya veya Kadıköy, İstanbul"></label><p class="hint">Yalnızca arama başlatıldığında OpenStreetMap üzerinden bu bölgenin sınırları bulunur.</p><details class="advanced"><summary>Gelişmiş: Koordinatları kendim gireceğim</summary><div class="fields bounds"><label>Batı<input id="west" type="number" step="any" placeholder="-"></label><label>Güney<input id="south" type="number" step="any" placeholder="-"></label><label>Doğu<input id="east" type="number" step="any" placeholder="-"></label><label>Kuzey<input id="north" type="number" step="any" placeholder="-"></label></div></details></div>
-<label class="check"><input type="checkbox" id="download-consent"><span>Gerçek uçuş eşleştirmesinde UTC gününe ait yaklaşık 3,5 GB ADS-B verisi indirilebileceğini biliyorum.</span></label>
-<button id="locate" class="primary" disabled>◈ Uçuşları karşılaştır ve konum ara <span>→</span></button>
-<p class="hint">Sonuçlar kanıta dayalı adaylardır, kesin GPS adresi değildir.</p></div></div>
-<div class="panel output-panel" id="analysis-panel" hidden>
-<div class="section"><span class="count">ANALİZ</span><h2>Video inceleniyor</h2><p>Tarayıcıda oynatılan kaydın frekans spektrumunu canlı izle. Bu ön analiz, uçak tanıması veya kesin konum hesabı değildir.</p></div>
-<div class="canvas-card"><div class="canvas-title"><span>CANLI SES SPEKTRUMU</span><span id="peak">Hazır</span></div><canvas id="spectrum" width="720" height="230"></canvas><div class="axis"><span>80 Hz</span><span>Frekans yoğunluğu · 80–1600 Hz</span><span>1600 Hz</span></div></div>
-<button class="secondary" id="listen" disabled>▶ Kaydı oynat ve sesi incele</button>
-<div class="process"><div class="section"><span class="count">04 / ANALİZ AKIŞI</span><h2>Konum araması</h2></div><div id="steps"><div class="step" data-i="1"><span>01</span><div><b>Ses dosyasını ayır</b><small>FFmpeg · motor sunucusu</small></div><i>○</i></div><div class="step" data-i="2"><span>02</span><div><b>Doppler geçişlerini bul</b><small>Frekans-zaman eğrileri</small></div><i>○</i></div><div class="step" data-i="3"><span>03</span><div><b>Uçuş arşivini karşılaştır</b><small>ADSB.lol · çekim tarihi</small></div><i>○</i></div><div class="step" data-i="4"><span>04</span><div><b>Konum adaylarını hesapla</b><small>Fiziksel eşleştirme</small></div><i>○</i></div></div></div>
-<div id="status" class="status" role="status" aria-live="polite">Videonu yükle, uçak sesi olup olmadığını inceleyelim.</div><div id="events" class="events" hidden></div>
-</div></section>
-<section id="results" class="panel results" hidden><div class="section"><span class="count">05 / SONUÇLAR</span><h2>Aday çekim konumları</h2><p id="verdict"></p></div><div class="result-grid"><div id="map" class="map"></div><div id="candidates" class="candidates"></div></div><button id="export" class="secondary">GeoJSON olarak indir ↓</button></section>
-<section class="panel server" id="server"><div><span class="count">SUNUCU BAĞLANTISI</span><h2>Gerçek konum hesabı nasıl çalışır?</h2><p>GitHub Pages arayüzü, mevcut Codespaces 7070 adresine otomatik bağlanır. Motor bağlıysa videoyu yükleyip analiz deneyebilirsin. Codespaces durursa Pages açılır, ancak analiz geçici olarak çevrimdışı olur. Public port ortak kullanım için geçici bir test yöntemidir; kimlik doğrulama ve dosya izolasyonu henüz bulunmuyor.</p><div class="api-row"><input id="api-url" placeholder="Codespaces analiz motorunun HTTPS adresi" aria-label="Analiz motoru URL"><button id="connect" class="secondary">Bağlantıyı test et</button></div><div id="connection-detail" class="hint">Codespaces bağlantısı kontrol ediliyor.</div></div><div class="server-links"><a class="cta-link" href="https://codespaces.new/erenuss/Yaman-n-oyunlar-?devcontainer_path=.devcontainer%2Fdoppler-locate%2Fdevcontainer.json&quickstart=1" target="_blank" rel="noopener">☁ GitHub ile tek tıkla çalıştır ↗</a><a class="cta-link alt" href="http://127.0.0.1:7070" target="_blank" rel="noopener">Yerel uygulamayı aç ↗</a><a class="cta-link alt" href="https://github.com/erenuss/Yaman-n-oyunlar-/tree/main/doppler-locate" target="_blank" rel="noopener">Kurulum / kaynak kod ↗</a></div></section>
-<footer>Fizik modeli: <a href="https://github.com/leo-aa88/aerodoppler">AeroDoppler (MIT)</a> · Uçuş kayıtları: ADSB.lol · Harita: OpenStreetMap. <b>Kanıt skoru, doğrulanmış GPS konumu değildir.</b></footer>
-</main></body></html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#0c1c21"><meta name="description" content="Fotoğraf veya video yükle. Çekim konumunu GPS, tabelalar, tanınabilir yapılar ve uçak sesiyle araştır.">
+  <title>LocateVideo · Fotoğraf ve videodan konum bul</title>
+  <link rel="stylesheet" href="./style.css">
+  <script type="module" src="./app.js"></script>
+</head>
+<body>
+  <header><div class="bar"><a class="brand" href="./" aria-label="LocateVideo ana sayfa"><span class="mark" aria-hidden="true">◎</span> Locate<span>Video</span></a><a class="navlink" href="#about">Nasıl çalışır?</a></div></header>
+  <main>
+    <section class="intro"><p class="eyebrow">KONUM ARAŞTIRMASI</p><h1>Burada <em>neredeyiz?</em></h1><p>Bir fotoğraf veya video seç. Görüntüdeki yapıları, tabelaları ve kayda eklenmiş konum bilgisini inceleyelim. Videoda uçak sesi varsa onu da değerlendirelim.</p></section>
+    <section id="workbench" aria-label="Medya analizi">
+      <div class="source">
+        <label class="drop" id="drop-zone" for="file">
+          <input id="file" type="file" accept="image/*,video/*,audio/*,.heic,.heif,.avif,.mov,.m4v,.m4a,.mkv,.flac,.wav">
+          <span class="upload-mark" aria-hidden="true">↑</span><strong id="pick-title">Fotoğraf veya video seç</strong>
+          <span class="muted" id="pick-hint">Dosyayı buraya da bırakabilirsin.</span><span class="button" id="pick-button">Dosya seç</span>
+        </label>
+        <p class="note local-note">Görüntü analizi cihazında çalışır. Uçuş arşivi için kayıt göndermek senin seçimin.</p>
+        <p id="file-error" role="alert" hidden></p>
+        <section id="preview" class="card" hidden><h2>Seçilen kayıt</h2><div id="player"></div><p id="file-name"></p><p class="note" id="file-info"></p></section>
+      </div>
+      <div id="report" hidden>
+        <section class="card verdict" aria-live="polite"><p class="eyebrow">SONUÇ</p><h2 id="verdict">Kayıt inceleniyor</h2><p id="verdict-note"></p><p class="warning" id="conflict" hidden></p><div id="candidates"></div>
+          <button id="export" class="text-btn" hidden>Sonuçları GeoJSON olarak indir</button>
+          <div id="map-wrap" hidden><iframe id="map" title="Seçilen yerin haritası" loading="lazy" referrerpolicy="no-referrer"></iframe></div>
+        </section>
+        <section class="card"><h2>Bulunan ipuçları</h2><dl class="checks">
+          <div><dt>Dosyadaki konum</dt><dd id="meta-status">Okunuyor…</dd></div>
+          <div id="text-row"><dt>Tabela ve yazılar</dt><dd id="text-status">Bekliyor…</dd></div>
+          <div id="vision-row"><dt>Yapı ve simge yerler</dt><dd id="vision-status">Bekliyor…</dd></div>
+          <div id="sound-row" hidden><dt>Uçak sesi</dt><dd id="sound-status"></dd></div>
+        </dl>
+        <details id="ocr-detail" hidden><summary>Görüntüden okunan yazılar</summary><ul id="ocr-lines"></ul></details>
+        <div class="actions"><button id="wide" class="secondary" hidden>Daha fazla yapıyı tara</button><button id="stop-wide" class="text-btn" hidden>Geniş taramayı durdur</button></div>
+        <p id="wide-note" class="note" hidden></p></section>
+        <section id="flight-panel" class="card" hidden><p class="eyebrow">UÇAK SESİ</p><h2>Geçmiş uçuşlarla karşılaştır</h2>
+          <p class="note">İzinli bir kayıtta olası uçak geçişlerini mevcut Doppler motoruyla kontrol edebilirsin. Bu düğme dosyayı analiz sunucusuna gönderir.</p>
+          <button class="secondary" id="inspect-air">İzin ver ve geçişleri ara</button><p id="flight-status" role="status" aria-live="polite"></p>
+          <form id="flight-form" hidden>
+            <p id="flight-why"></p>
+            <label for="day">Çekim günü (UTC)</label><input id="day" type="date" required>
+            <label for="clock-type">Çekim saati</label><select id="clock-type"><option value="unknown">Bilinmiyor</option><option value="known">UTC saatini kullan</option></select>
+            <div id="clock-fields" hidden><label for="clock">Kayıt başlangıcı (UTC)</label><input id="clock" type="time" step="1">
+            <label for="tolerance">Saatin hata payı (saniye)</label><input id="tolerance" type="number" min="0" max="86400" value="60"></div>
+            <p id="time-hint" class="note"></p>
+            <label for="region">Olası şehir veya bölge</label><input id="region" type="text" required placeholder="Örn. İzmir, Türkiye" autocomplete="off">
+            <p id="region-hint" class="note">Biliyorsan yaz. Motor bu bölgenin geçmiş uçuş kayıtlarında arama yapar.</p>
+            <label class="checkbox"><input id="archive-consent" type="checkbox" required>Sunucunun günlük uçuş arşivini indirmesini onaylıyorum (yaklaşık 3,5 GB).</label>
+            <button id="locate" class="button" type="submit">Uçuş kayıtlarını karşılaştır</button>
+          </form>
+          <div id="flight-results" hidden></div>
+        </section>
+      </div>
+    </section>
+    <details id="about" class="about"><summary>Nasıl çalışır?</summary><p>GPS varsa dosyadaki koordinatı gösteririz. Görsel analiz önce okunabilir yer adlarını ve bilinen yapıların referans fotoğraflarını arar. Videodan en fazla beş farklı an örneklenir. Bir tabelada yazan şehir gidilecek yönü, tanınan bir yapı da uzakta görünen bir yeri gösterebilir.</p><p>İlk kullanımda dil ve görüntü modelleri indirilir. Daha geniş yapı taraması altı kıtalar grubunu kapsar ve ilk seferde toplam yaklaşık 260 MB kullanabilir. Tanınan bir yapının adını haritada aramak için gerektiğinde Wikipedia’ya yalnızca yapı adı gönderilir.</p><p>Yalnızca yerel ses analizi, bir uçak geçişinin olası olup olmadığını gösterir. İsteğe bağlı uçuş eşleştirmesi için Codespaces motorunun açık olması, uygun ses izi, kayıt tarihi ve bir arama bölgesi gerekir. Tek geçişte UTC saati de gerekir.</p>
+      <details class="engine-settings"><summary>Uçuş motoru bağlantısı</summary><label for="api-url">Motor adresi</label><input type="url" id="api-url"><button id="connect" class="secondary">Bağlantıyı kontrol et</button><p id="connection-detail" class="note"></p></details>
+      <p class="credits">Veri ve modeller: <a href="https://www.geonames.org/" rel="noreferrer">GeoNames</a> (<a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>), Wikimedia, Google Landmarks, MediaPipe, YAMNet, Tesseract, AeroDoppler ve ADSB.lol. <a href="https://github.com/erenuss/Yaman-n-oyunlar-/tree/main/doppler-locate">Kaynaklar ve kapsam</a></p>
+    </details>
+  </main><footer>LocateVideo</footer>
+</body></html>
