@@ -15,6 +15,18 @@
 
 # LocateVideo
 
+## Yeni kullanıcı akışı: Önce sadece videonu yükle
+
+1. [LocateVideo](https://erenuss.github.io/Yaman-n-oyunlar-/locatevideo/) adresinden video veya ses dosyasını seç ve analiz izni ver.
+2. Dosya mevcut Codespaces motoruna yüklenir; ses ayrıştırma ve Doppler geçiş tespiti **çekim tarihi, saat veya bölge sorulmadan** otomatik yapılır.
+3. Kullanılabilir uçak sesi bulunmazsa sistem bir konum uydurmaz.
+4. Uçak geçişi varsa tarih (UTC) ve olası şehir/bölge sorulur. **Tek geçişte ayrıca çekim başlangıç saati** gerekir. En az iki bağımsız geçiş bulunursa saat olmadan arama denenebilir.
+5. MP4/MOV başlığında oluşturulma zamanı bulunursa tarih ve saat önerilir, ancak bu her zaman gerçek çekim zamanı değildir; doğrulamak gerekir. GPS metadata'sı otomatik konum cevabı olarak kullanılmaz.
+6. Kullanıcı beş hazır şehirden birini seçebilir veya serbest şekilde başka şehir/semt yazabilir. Coğrafi bölge adını OpenStreetMap Nominatim üzerinden çözümleme yalnızca konum araması başlatıldığında yapılır.
+7. Uçuş arşivini indirme onayından sonra olası konumlar hesaplanır. Bunlar **doğrulanmış GPS adresleri veya kalibre edilmiş olasılıklar değildir**.
+
+Bu sürüm dünya çapında kör arama yapamaz; uçuşları eşleştirebilmek için gerçek çekim günü ve olası bölge gerekir. 40 saniyeyi aşan, net uçak sesi bulunan videolar mevcut dedektör için daha uygundur. Sunucu Codespaces durursa analiz çevrimdışı kalır.
+
 Video ve ses dosyalarındaki uçak Doppler eğrilerini tarihsel ADS-B uçuşlarıyla eşleştiren deneysel araştırma uygulaması. Arayüz GitHub Pages'te (önizleme), gerçek fizik hesabı AeroDoppler (MIT) motorunda çalışır.
 
 ## EN KOLAY: GitHub Codespaces ile bulutta tek tıkla başlat
@@ -23,7 +35,7 @@ Video ve ses dosyalarındaki uçak Doppler eğrilerini tarihsel ADS-B uçuşlar�
 
 1. GitHub hesabınla giriş yap ve **Create codespace** seç.
 2. Depodaki `.devcontainer/doppler-locate/devcontainer.json` yapılandırması otomatik olarak Docker motorunu başlatmaya çalışır. Hazır olduğunda **DOPPLER / LOCATE — Uygulama** (port **7070**) bağlantısını **Ports** sekmesinden **Open in Browser** ile aç. Otomatik açılabilir.
-3. Açılan uygulamada video yükle, gerçek **UTC çekim tarihini** seç, onayları ver ve **Konum eşleştirmesini başlat** seç.
+3. Açılan uygulamada video yükle ve analiz izni ver. Uçak sesi otomatik aranır; daha sonra yalnızca gerekli tarih, saat ve bölge bilgileri sorulur.
 4. Çekim saati bilinmiyorsa en az **iki farklı uçak geçişi** gerekir. Arama alanını dar tut. Günlük uçuş arşivi **yaklaşık 3,5 GB** indirebilir ve hesaplama uzun sürebilir.
 5. İşin bitince GitHub'da Codespace'i **Stop** yap. Free kişisel GitHub hesaplarında belirli ücretsiz Codespaces kullanım hakkı vardır; kota aşılırsa ücretli kullanımı sen ayrıca açmadıkça her koşulda ücretsiz kalacağı garantisi yok.
 
