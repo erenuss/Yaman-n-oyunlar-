@@ -220,6 +220,7 @@ function hint(lines){ctx.save();ctx.textAlign='center';ctx.textBaseline='middle'
    Dokunma, elin 3 boyutlu noktalarıyla ölçülür: başparmak ucunun parmağın uç-boğum çizgisine uzaklığı.
    Dokunmatik ve klavye: alttaki tuşlar (A S D F J K L Ş, diyezler W E R U I). */
 const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+let SPD=.16;
 const FING=[8,12,16,20],FN=['işaret','orta','yüzük','serçe'],KEYMAP={L:[3,2,1,0],R:[4,5,6,7]},KB='asdfjklş',KBB={w:0,e:1,r:3,u:4,i:5};
 const held=new Map(),fingSt={},keyGlow=new Map();
 function keyNotes(){return SONG.on?SONG.keys:scaleNotes(8,60+S.key)}
@@ -227,7 +228,7 @@ function keyFinger(i){return i<4?['L',KEYMAP.L.indexOf(i)]:['R',KEYMAP.R.indexOf
 function whiteRect(i){const sm=W<640,gap=sm?4:8,mid=sm?14:32,kh=sm?50:58,w=Math.min(96,(W-24-mid-gap*6)/8),tw=w*8+gap*6+mid,x0=(W-tw)/2;return{x:x0+i*(w+gap)+(i>=4?mid:0),y:botY()-kh-4,w,h:kh}}
 // diyez tuşları: iki naturel arasında yarım ses boşluk varsa, üst sırada
 function keyItems(){const ks=keyNotes(),out=[];for(let i=0;i<8;i++)out.push({m:ks[i],r:whiteRect(i),i,black:false});
-  for(let i=0;i<8;i++){const m=ks[i]+1;if(ks.includes(m))continue;const a=whiteRect(i),b=i<7?whiteRect(i+1):null,bw=a.w*.62,bh=W<640?30:34,cx=b?(a.x+a.w+b.x)/2:a.x+a.w+bw*.4;out.push({m,r:{x:cx-bw/2,y:a.y-bh-6,w:bw,h:bh},i,black:true})}
+  for(let i=0;i<7;i++){const m=ks[i]+1;if(ks.includes(m))continue;const a=whiteRect(i),b=i<7?whiteRect(i+1):null,bw=a.w*.62,bh=W<640?30:34,cx=b?(a.x+a.w+b.x)/2:a.x+a.w+bw*.4;out.push({m,r:{x:cx-bw/2,y:a.y-bh-6,w:bw,h:bh},i,black:true})}
   return out}
 function keyAt(x,y){for(const k of keyItems().sort((a,b)=>b.black-a.black)){const r=k.r;if(x>=r.x-2&&x<=r.x+r.w+2&&y>=r.y-6&&y<=r.y+r.h+4)return k.m}return null}
 function keyRectOf(m){const k=keyItems().find(k=>k.m===m);return k?k.r:null}
@@ -242,15 +243,18 @@ function contacts(h){const P=h.w||h.pts,scale=d3(P[0],P[9])||1,ON=h.w?.24:.3;
   return FING.map((t,f)=>{const s=segParam(P[4],P[t],P[t-2]),curl=d3(P[0],P[t])/(d3(P[0],P[t-2])||1);return{d:s.d/scale,t:s.t,ok:curl>.85,on:ON,off:ON*1.5}})}
 function thereminFrame(){
   if(S.mode!=='theremin')return;const now=performance.now(),live=new Set(),ks=keyNotes();
-  for(const h of hands){const id=String(h.id),st=fingSt[id]||(fingSt[id]={f:[null,null,null,null],n:[0,0,0,0],sm:null,tilt:false,ang:0});live.add(id);
+  for(const h of hands){const id=String(h.id),st=fingSt[id]||(fingSt[id]={f:[null,null,null,null],n:[0,0,0,0],rel:[0,0,0,0],sm:null});live.add(id);
     const palm=[0,5,9,13,17].reduce((a,i)=>({x:a.x+h.pts[i].x/5,y:a.y+h.pts[i].y/5}),{x:0,y:0});
     st.sm=st.sm==null?palm.y:st.sm+(palm.y-st.sm)*.25;const wig=S.bend?clamp(-(palm.y-st.sm)/h.size*3,-.25,.25):0;
-    const ang=Math.atan2(h.pts[9].x-h.pts[0].x,-(h.pts[9].y-h.pts[0].y))*180/Math.PI;st.ang=ang;st.tilt=st.tilt?Math.abs(ang)>22:Math.abs(ang)>32;
-    const C=contacts(h);h.contacts=C;let best=-1,mn=9;C.forEach((c,f)=>{if(c.ok&&c.d<mn){mn=c.d;best=f}});
+    const C=contacts(h);h.contacts=C;const ord=[0,1,2,3].filter(f=>C[f].ok).sort((a,b)=>C[a].d-C[b].d),best=ord.length?ord[0]:-1,second=ord.length>1?C[ord[1]].d:9;
+    // yeni nota için bir parmak açıkça en yakın olmalı (komşu parmak karışmasın)
+    // başparmak hızla bir parmaktan diğerine geçerken yoldaki parmak çalmasın: yavaşlayınca karar ver
+    const Q=h.w||h.pts,sc=d3(Q[0],Q[9])||1,T=Q[4],spd=st.pt?d3(T,st.pt)/sc:0;st.pt={x:T.x,y:T.y,z:T.z||0};st.spd=st.spd==null?spd:st.spd*.5+spd*.5;
+    const clear=best>=0&&C[best].d<C[best].on&&C[best].d<second*.72&&st.spd<SPD,active=st.f.findIndex(Boolean);
     for(let f=0;f<4;f++){const c=C[f],src='h'+id+'_'+f,cur=st.f[f];
       // iki kare üst üste görülünce aç/kapa (titremeye karşı)
-      const want=cur?c.d<c.off:(f===best&&c.ok&&c.d<c.on);
-      if(want!==!!cur){st.n[f]++;if(st.n[f]>=2){st.n[f]=0;if(want){const base=ks[KEYMAP[h.role][f]];st.f[f]=st.tilt?'sharp':'nat';noteOn(src,base+(st.tilt?1:0),{y0:palm.y,size:h.size})}else{st.f[f]=null;noteOff(src)}}}else st.n[f]=0;
+      const want=cur?(c.d<c.off&&!(clear&&best!==f&&C[best].d<c.d*.6)):(clear&&f===best&&(active<0||active===f)&&now-(st.rel[f]||0)>70);
+      if(want!==!!cur){st.n[f]++;if(st.n[f]>=2){st.n[f]=0;if(want){st.f[f]='nat';noteOn(src,ks[KEYMAP[h.role][f]],{y0:palm.y,size:h.size})}else{st.f[f]=null;st.rel[f]=now;noteOff(src)}}}else st.n[f]=0;
       const n=held.get(src);if(n&&n.ref){if(S.bend){const dy=(n.ref.y0-palm.y)/h.size;n.bend=Math.sign(dy)*clamp((Math.abs(dy)-.6)/1.4,0,1)*2}else n.bend=0;n.v.pitch(n.m+n.bend+wig,.03)}}}
   for(const id of Object.keys(fingSt))if(!live.has(id)){for(let f=0;f<4;f++)noteOff('h'+id+'_'+f);delete fingSt[id]}
   for(const[k,v]of keyGlow){if(v<.02)keyGlow.delete(k);else keyGlow.set(k,v*.93)}
@@ -338,8 +342,7 @@ function drawTheremin(){
       const[hd,f]=keyFinger(k.i);ctx.font=`500 ${W<640?9:10}px ${FONT}`;ctx.fillStyle=on?'#333':'#7a7a7a';ctx.fillText(W<640?FN[f].slice(0,3):(hd==='L'?'sol ':'sağ ')+FN[f],r.x+r.w/2,r.y+r.h*.74)}}
   // parmak etiketleri: uçta naturel, orta boğumda diyez
   for(const h of hands){const st=fingSt[String(h.id)];for(let f=0;f<4;f++){const base=ks[KEYMAP[h.role][f]],z=st&&st.f[f];
-    const sh=st&&st.tilt,m=base+(sh?1:0);pill(h.pts[FING[f]],nameOf(m),!!z,m===tgt||(tgt===base+1&&!sh&&false),0,sh)}
-    if(st&&st.tilt){const w=h.pts[0];ctx.font=`600 13px ${MONO}`;rr(w.x-24,w.y+10,48,22,11);ctx.fillStyle=ACC;ctx.fill();ctx.fillStyle='#fff';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('diyez',w.x,w.y+21.5)}}
+    pill(h.pts[FING[f]],nameOf(base),!!z,base===tgt,0)}}
   if(!SONG.on){const names=[...held.values()].map(n=>nameOf(n.m));if(names.length){ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle='#ededed';ctx.font=`600 30px ${MONO}`;ctx.fillText(names.join('  ·  '),W/2,topY()+34)}
     else if(!hands.length)drawThHint()}
   ctx.restore();
@@ -364,7 +367,7 @@ function drawHighway(items,now,tgt){const whites=items.filter(k=>!k.black),hitW=
   ctx.font=`500 17px ${FONT}`;const words=line.map(n=>n.w||nameOf(n.m)),gap=10,ws=words.map(w=>ctx.measureText(w).width),tot=ws.reduce((a,c)=>a+c,0)+gap*(words.length-1),sc=Math.min(1,(W-28)/tot);
   ctx.save();ctx.translate(W/2-tot*sc/2,ly);ctx.scale(sc,sc);let x=0;line.forEach((n,k)=>{const idx=SONG.notes.indexOf(n);ctx.fillStyle=idx<SONG.i?'#ededed':idx===SONG.i?ACC:'#5a5a5a';ctx.textAlign='left';ctx.fillText(words[k],x,0);x+=ws[k]+gap});ctx.restore();
   if(SONG.i===0&&SONG.pos<SONG.notes[0].b){ctx.textAlign='center';ctx.font=`500 14px ${FONT}`;ctx.fillStyle='#bdbdbd';ctx.fillText(S.songEasy?'Herhangi bir parmağını başparmağına değdir':camOn?'Parlayan parmağını başparmağına değdir':'Parlayan tuşa dokun',W/2,(top+hitW)/2)}}
-function drawThHint(){const rows=camOn?[['İki elini kaldır, avuçların kameraya baksın',''],['Başparmağını bir parmağına değdir','Nota çalar'],['Elini yana yatır','Diyez çalar'],['Sol el: Do Re Mi Fa','serçeden işarete'],['Sağ el: Sol La Si Do','işaretten serçeye']]
+function drawThHint(){const rows=camOn?[['İki elini kaldır, avuçların kameraya baksın',''],['Başparmağını bir parmağına değdir','Nota çalar'],['Sol el: Do Re Mi Fa','serçeden işarete'],['Sağ el: Sol La Si Do','işaretten serçeye']]
     :[['Alttaki tuşlara dokun','Basılı tuttukça çalar'],['Klavyede','A S D F J K L Ş · diyez W E R U I']];
   const narrow=W<560,bw=Math.min(W-24,460),rh=narrow?44:34,bh=rows.length*rh+28,x0=W/2-bw/2,y0=(topY()+whiteRect(0).y-50)/2-bh/2;
   ctx.fillStyle='rgba(10,10,11,.86)';rr(x0,y0,bw,bh,16);ctx.fill();ctx.strokeStyle='rgba(255,255,255,.08)';ctx.lineWidth=1;ctx.stroke();
@@ -393,18 +396,23 @@ const EXT=.9,TIPS=[8,12,16,20];
 const CON=[[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],[9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
 let hands=[],slots=[],handIdN=0,mirror=true;
 function toScreen(p){const vw=vid.videoWidth||640,vh=vid.videoHeight||480;const s=Math.max(W/vw,H/vh),dw=vw*s,dh=vh*s;return{x:(mirror?1-p.x:p.x)*dw+(W-dw)/2,y:p.y*dh+(H-dh)/2}}
-function processHands(lms,wl=[]){
+let handCal=0;   // + : etiket 'Left' = ekranın solundaki el
+function processHands(lms,wl=[],hd=[]){
   // eller hareket etse ya da çaprazlansa bile her eli önceki karedeki eşiyle eşleştir
-  const raw=lms.slice(0,2).map((lm,i)=>{const pts=lm.map(toScreen),w=wl[i]&&wl[i].length===21?wl[i].map(p=>({x:mirror?-p.x:p.x,y:p.y,z:p.z})):null;return{pts,w,cx:pts[9].x}});
+  const raw=lms.slice(0,2).map((lm,i)=>{const pts=lm.map(toScreen),w=wl[i]&&wl[i].length===21?wl[i].map(p=>({x:mirror?-p.x:p.x,y:p.y,z:p.z})):null;const c=hd[i]&&hd[i][0];return{pts,w,cx:pts[9].x,label:c&&c.score>.6?c.categoryName:null}});
+  if(raw.length===2&&raw[0].label&&raw[1].label&&raw[0].label!==raw[1].label){const lft=raw[0].cx<raw[1].cx?raw[0]:raw[1];handCal=clamp(handCal+(lft.label==='Left'?1:-1),-40,40)}
+  const roleOf=r=>Math.abs(handCal)>=6&&r.label?((r.label==='Left')===(handCal>0)?'L':'R'):null;
   const free=[...slots],next=[];
   if(raw.length===2&&free.length===2&&dist(raw[0].pts[9],free[1].pts[9])+dist(raw[1].pts[9],free[0].pts[9])<dist(raw[0].pts[9],free[0].pts[9])+dist(raw[1].pts[9],free[1].pts[9]))free.reverse();
   const pair=raw.length===2&&free.length===2;
   raw.forEach((r,ri)=>{let s=null;if(pair){if(dist(free[ri].pts[9],r.pts[9])<W*.3)s=free[ri]}else{let bd=W*.3;for(const f of free){const d=dist(f.pts[9],r.pts[9]);if(d<bd){bd=d;s=f}}}
-    if(s){if(!pair)free.splice(free.indexOf(s),1);r.pts=r.pts.map((p,i)=>({x:s.pts[i].x+(p.x-s.pts[i].x)*.78,y:s.pts[i].y+(p.y-s.pts[i].y)*.78}));r.role=s.role;r.id=s.id}next.push(r)});
+    if(s){if(!pair)free.splice(free.indexOf(s),1);r.pts=r.pts.map((p,i)=>({x:s.pts[i].x+(p.x-s.pts[i].x)*.78,y:s.pts[i].y+(p.y-s.pts[i].y)*.78}));if(r.w&&s.w)r.w=r.w.map((p,i)=>({x:s.w[i].x+(p.x-s.w[i].x)*.6,y:s.w[i].y+(p.y-s.w[i].y)*.6,z:s.w[i].z+(p.z-s.w[i].z)*.6}));r.role=s.role;r.id=s.id;r.dis=s.dis||0}next.push(r)});
   const used=new Set(next.filter(r=>r.role).map(r=>r.role)),fresh=next.filter(r=>!r.role).sort((a,b)=>a.cx-b.cx);
-  for(const r of fresh){if(!used.size&&fresh.length===1)r.role=r.cx<W/2?'L':'R';else r.role=used.has('L')?'R':'L';used.add(r.role)}
-  if(next.length===1){const r=next[0],fs=r.id&&fingSt[String(r.id)];if(!strPinch.has(r.role)&&!(fs&&fs.f.some(Boolean))){if(r.role==='R'&&r.cx<W*.4)r.role='L';else if(r.role==='L'&&r.cx>W*.6)r.role='R'}}
-  for(const r of next)if(!r.id)r.id=++handIdN;slots=next.map(r=>({pts:r.pts,role:r.role,id:r.id}));
+  for(const r of fresh){const lr=roleOf(r);if(lr&&!used.has(lr))r.role=lr;else if(!used.size&&fresh.length===1)r.role=r.cx<W/2?'L':'R';else r.role=used.has('L')?'R':'L';used.add(r.role)}
+  // rol, eldeki etiket uzun süre tersini söylerse ve el çalmıyorsa değişir
+  for(const r of next){const lr=roleOf(r),fs=r.id&&fingSt[String(r.id)],busy=strPinch.has(r.role)||(fs&&fs.f.some(Boolean));r.dis=lr&&lr!==r.role?(r.dis||0)+1:0;if(r.dis>12&&!busy&&!next.some(o=>o!==r&&o.role===lr)){r.role=lr;r.dis=0}}
+  if(next.length===1&&Math.abs(handCal)<6){const r=next[0],fs=r.id&&fingSt[String(r.id)];if(!strPinch.has(r.role)&&!(fs&&fs.f.some(Boolean))){if(r.role==='R'&&r.cx<W*.4)r.role='L';else if(r.role==='L'&&r.cx>W*.6)r.role='R'}}
+  for(const r of next)if(!r.id)r.id=++handIdN;slots=next.map(r=>({pts:r.pts,w:r.w,role:r.role,id:r.id,dis:r.dis}));
   for(const h of next){h.size=dist(h.pts[0],h.pts[9])||1;h.pr=TIPS.map(t=>dist(h.pts[4],h.pts[t])/h.size);h.ext=TIPS.map(t=>dist(h.pts[0],h.pts[t])/h.size);h.open=TIPS.reduce((a,t)=>a+dist(h.pts[0],h.pts[t]),0)/4/h.size}
   hands=next;
   if(S.mode==='strings')stringHands();
@@ -485,7 +493,7 @@ async function start(withCam){
 }
 function loop(){
   requestAnimationFrame(loop);
-  if(camOn&&landmarker&&vid.readyState>=2&&vid.currentTime!==lastVT){lastVT=vid.currentTime;try{const t0=performance.now(),r=landmarker.detectForVideo(vid,t0);detMs=detMs*.9+(performance.now()-t0)*.1;detN++;processHands(r.landmarks||[],r.worldLandmarks||r.worldlandmarks||[])}catch(e){}}
+  if(camOn&&landmarker&&vid.readyState>=2&&vid.currentTime!==lastVT){lastVT=vid.currentTime;try{const t0=performance.now(),r=landmarker.detectForVideo(vid,t0);detMs=detMs*.9+(performance.now()-t0)*.1;detN++;processHands(r.landmarks||[],r.worldLandmarks||r.worldlandmarks||[],r.handedness||r.handednesses||[])}catch(e){}}
   thereminFrame();pointerFrame();if(S.mode==='strings')bendRings();draw();
 }
 requestAnimationFrame(loop);
@@ -501,7 +509,7 @@ const HELP={
     <p>Dokunmatik: basılı tutup çek, tel oluşur. Kaydırınca çalar.</p>`],
   theremin:['Theremin',`<p>İki elini piyanonun üstündeymiş gibi tut. Avuçların kameraya baksın.</p><dl>
     <dt>Çal</dt><dd>Başparmağını bir parmağına değdir; o parmağın notası çalar. Değdikçe sürer, ayırınca biter.</dd>
-    <dt>Diyez</dt><dd>Elini yana yatırınca parmak uçlarındaki notalar diyeze döner (Sol yerine Sol#). Yatıkken değdirirsen diyez çalar.</dd>
+    <dt>Ton</dt><dd>Ton düğmesinden başka bir ton seçersen parmaklar o tonun notalarını çalar; diyez ve bemoller kendiliğinden gelir (Re majörde Fa# ve Do#).</dd>
     <dt>Sol el</dt><dd>Serçeden işarete: Do, Re, Mi, Fa.</dd>
     <dt>Sağ el</dt><dd>İşaretten serçeye: Sol, La, Si, Do. Her parmağın notası ucunda yazar.</dd>
     <dt>Ses</dt><dd>Sakin pad, Rüya, Elektrik piyano, 70'ler synth, Yaylılar, Theremin ve Vokal arasından seç.</dd>
@@ -509,7 +517,7 @@ const HELP={
     <p><b>Şarkı</b> ile bir ezgi seç: notalar tuşlara iner, sıradaki parmağın elinde parlar. Şarkı seni bekler.</p>`],
 };
 function showHelp(){const[t,b]=HELP[S.mode];$('#helpTitle').textContent=t;$('#helpBody').innerHTML=b;$('#help').hidden=false}
-function setMode(m){songStop();releaseAll();document.body.dataset.mode=m;if(m!=='theremin'&&S.drone){S.drone=false;droneSet(false);$('#droneBtn').classList.remove('on')}S.mode=m;save();
+function setMode(m){songStop();releaseAll();document.body.dataset.mode=m;if(m!=='theremin'&&S.drone){S.drone=false;droneSet(false);$('#droneTog').classList.remove('on')}S.mode=m;save();
   document.querySelectorAll('#modes button').forEach(b=>b.classList.toggle('on',b.dataset.mode===m));
   document.querySelectorAll('[data-for]').forEach(el=>el.hidden=el.dataset.for!==m);renderTut()}
 document.querySelectorAll('#modes button').forEach(b=>b.onclick=()=>{initAudio();const m=b.dataset.mode;if(m===S.mode)return;setMode(m);
@@ -526,11 +534,19 @@ function toneList(){const ul=$('#toneList');ul.innerHTML='';for(const[k,t]of Obj
 toneBtn.onclick=()=>{initAudio();toneList();$('#tones').hidden=false};
 $('#songBtn').onclick=()=>{initAudio();if(SONG.on)songStop();else songOpen()};
 $('#resAgain').onclick=()=>{$('#result').hidden=true;songStart(S.song)};$('#resList').onclick=()=>{$('#result').hidden=true;songOpen()};$('#resFree').onclick=()=>{$('#result').hidden=true};
-$('#droneBtn').onclick=e=>{initAudio();S.drone=!S.drone;e.currentTarget.classList.toggle('on',S.drone);droneSet(S.drone)};
+$('#droneTog').onclick=e=>{initAudio();S.drone=!S.drone;e.currentTarget.classList.toggle('on',S.drone);droneSet(S.drone)};
+// ton seçici
+function keyUI(){$('#keyLbl').textContent=NN[S.key];$('#keySel').value=S.key;$('#scaleSel').value=S.scale}
+function keySheet(){const g=$('#keyGrid');g.innerHTML='';NN.forEach((n,i)=>{const b=document.createElement('button');b.textContent=n;b.className=i===S.key?'on':'';b.onclick=()=>setKey(i,S.scale);g.append(b)});
+  document.querySelectorAll('#modeSeg button').forEach(b=>{b.classList.toggle('on',b.dataset.sc===S.scale);b.onclick=()=>setKey(S.key,b.dataset.sc)});
+  $('#keyPrev').textContent=scaleNotes(8,60+S.key).map(nameOf).join('  ');$('#keys').hidden=false}
+function setKey(k,sc){initAudio();S.key=k;S.scale=sc;save();retune();thStopAll();keyUI();if(S.drone){droneSet(false);droneSet(true)}keySheet();
+  scaleNotes(8,60+S.key).forEach((m,i)=>setTimeout(()=>{const v=toneVoice(S.thTone,m);setTimeout(()=>v.stop(),170)},i*110))}
+$('#keyBtn').onclick=()=>keySheet();keyUI();
 $('#flipBtn').onclick=async()=>{S.facing=S.facing==='user'?'environment':'user';save();if(camOn){try{await startCam()}catch(e){status('Diğer kamera açılamadı');S.facing=S.facing==='user'?'environment':'user';try{await startCam()}catch(_){}}}};
 $('#keySel').innerHTML=NN.map((n,i)=>`<option value="${i}">${n}</option>`).join('');$('#keySel').value=S.key;
 $('#scaleSel').innerHTML=Object.entries(SCALES).map(([k,v])=>`<option value="${k}">${v.ad}</option>`).join('');$('#scaleSel').value=S.scale;
-$('#keySel').onchange=e=>{S.key=+e.target.value;retune();save();if(S.drone){droneSet(false);droneSet(true)}};
+$('#keySel').onchange=e=>{S.key=+e.target.value;retune();save();keyUI();if(S.drone){droneSet(false);droneSet(true)}};
 $('#scaleSel').onchange=e=>{S.scale=e.target.value;retune();save()};
 $('#toneSel').value=S.strTone;$('#toneSel').onchange=e=>{S.strTone=e.target.value;save();initAudio();ks(55+S.key,.8)};
 const rev=$('#rev');rev.value=S.reverb;rev.oninput=()=>{S.reverb=+rev.value;if(revSend)revSend.gain.value=S.reverb;save()};
@@ -545,9 +561,9 @@ addEventListener('keydown',e=>{if(e.repeat||S.mode!=='theremin'||e.target.tagNam
 addEventListener('keyup',e=>{noteOff('k'+e.code)});
 let wake=null;async function keepAwake(){try{if(navigator.wakeLock&&!document.hidden)wake=await navigator.wakeLock.request('screen')}catch(e){}}
 document.addEventListener('visibilitychange',()=>{if(document.hidden)releaseAll();else if(camOn)keepAwake()});
-setMode(S.mode);
+setMode(S.mode);keyUI();
 if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('sw.js').catch(()=>{});
-if(DEBUG)window.__ho={get strings(){return strings},get hands(){return hands},get tut(){return tut},get notes(){return plog.length},get det(){return[detN,detMs.toFixed(1)]},level(){if(!analyser)return -1;analyser.getByteTimeDomainData(waveData);let m=0;for(const v of waveData)m=Math.max(m,Math.abs(v-128));return m},get ac(){return ac&&ac.state},plog,SONG,get held(){return [...held.values()].map(n=>({m:n.m,bend:+n.bend.toFixed(2)}))},get cont(){return hands.map(h=>h.contacts&&h.contacts.map(c=>c.d.toFixed(2)))},get tilt(){return Object.values(fingSt).map(s=>Math.round(s.ang)+(s.tilt?'#':''))},keyRect:m=>keyRectOf(m),SONGS};
+if(DEBUG)window.__ho={get strings(){return strings},get hands(){return hands},get tut(){return tut},get notes(){return plog.length},get det(){return[detN,detMs.toFixed(1)]},level(){if(!analyser)return -1;analyser.getByteTimeDomainData(waveData);let m=0;for(const v of waveData)m=Math.max(m,Math.abs(v-128));return m},get ac(){return ac&&ac.state},plog,SONG,get held(){return [...held.values()].map(n=>({m:n.m,bend:+n.bend.toFixed(2)}))},get cont(){return hands.map(h=>h.contacts&&h.contacts.map(c=>c.d.toFixed(2)))},set spdT(v){SPD=v},get spd(){return Object.values(fingSt).map(s=>(s.spd||0).toFixed(2))},get roles(){return hands.map(h=>h.role+(h.label||''))},get cal(){return handCal},keyRect:m=>keyRectOf(m),SONGS};
 
 /* ---------- kayıt (video + istenirse mikrofon) ---------- */
 let mrec=null,chunks=[],recStart=0,recTimer,micStream=null,micNode=null;

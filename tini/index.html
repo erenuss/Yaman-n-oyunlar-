@@ -50,7 +50,7 @@
     <button class="rb" id="tHarp" data-for="strings"><i><svg><use href="#i-harp"/></svg></i><small>Hazır arp</small></button>
     <button class="rb" id="tClear" data-for="strings"><i><svg><use href="#i-trash"/></svg></i><small>Temizle</small></button>
     <button class="rb" id="thTone" data-for="theremin" hidden><i><svg><use href="#i-tone"/></svg></i><small>Sakin</small></button>
-    <button class="rb" id="droneBtn" data-for="theremin" hidden><i><svg><use href="#i-drone"/></svg></i><small>Dem</small></button>
+    <button class="rb" id="keyBtn" data-for="theremin" hidden><i><b id="keyLbl" class="keylbl">Do</b></i><small>Ton</small></button>
   </div>
   <button id="rec" aria-label="Video kaydı"><span></span></button>
   <div class="side right">
@@ -100,6 +100,17 @@
   <div class="card">
     <div class="card-head"><h2>Ses</h2><button class="ic" data-close="tones" aria-label="Kapat"><svg><use href="#i-x"/></svg></button></div>
     <ul id="toneList" class="songlist tonelist"></ul>
+    <div class="row"><span>Dem sesi<small class="sub">Arkada kök ses çalar; ne çalarsan çal uyumlu duyulur</small></span><button class="tog" id="droneTog" aria-label="Dem sesi"></button></div>
+  </div>
+</section>
+
+<section class="layer" id="keys" hidden>
+  <div class="card">
+    <div class="card-head"><h2>Ton</h2><button class="ic" data-close="keys" aria-label="Kapat"><svg><use href="#i-x"/></svg></button></div>
+    <p class="muted">Parmaklar seçtiğin tonun notalarını çalar. Diyez ve bemoller kendiliğinden gelir.</p>
+    <div class="seg2" id="modeSeg"><button data-sc="major">Majör</button><button data-sc="minor">Minör</button></div>
+    <div class="keygrid" id="keyGrid"></div>
+    <div class="keyprev" id="keyPrev"></div>
   </div>
 </section>
 
