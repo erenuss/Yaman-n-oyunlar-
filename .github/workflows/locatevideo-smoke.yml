@@ -1,0 +1,17 @@
+name: LocateVideo public smoke test
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/locatevideo-smoke.yml'
+      - 'scripts/locatevideo-smoke.py'
+permissions:
+  contents: read
+jobs:
+  external-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify Pages, Codespaces, real WAV upload and acoustic event detection
+        run: python3 scripts/locatevideo-smoke.py
