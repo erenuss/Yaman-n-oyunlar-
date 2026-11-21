@@ -9,6 +9,8 @@ const script=fs.readFileSync(path.join(root,'app.js'),'utf8');
 const dom=new JSDOM(html,{url:'https://erenuss.github.io/Yaman-n-oyunlar-/doppler-locate/',runScripts:'outside-only'});
 const w=dom.window;
 const doc=w.document;
+w.addEventListener('error',event=>console.error('BROWSER EVENT ERROR:',event.message,event.error?.stack));
+w.addEventListener('unhandledrejection',event=>console.error('BROWSER REJECTION:',event.reason));
 const ids=[...doc.querySelectorAll('[id]')].map(el=>el.id);
 assert.equal(new Set(ids).size,ids.length,'Duplicate element IDs');
 for(const match of script.matchAll(/\$\('([^']+)'\)/g))assert.ok(doc.getElementById(match[1]),'Missing HTML element #'+match[1]);
@@ -48,6 +50,7 @@ async function waitFor(check,label){
  await delay(20);
  w.eval(script);
  doc.dispatchEvent(new w.Event('DOMContentLoaded'));
+ await delay(100);console.log('DIAGNOSTIC boot',JSON.stringify({readyState:doc.readyState,engine:doc.getElementById('engine-status').textContent,fetchCalls:calls,connect:typeof w.connect,draw:typeof w.drawPlaceholder}));
  await waitFor(()=>doc.getElementById('engine-status').textContent.includes('Motor bağlı'),'API connect');
  assert.ok(doc.getElementById('followup').hidden,'Should not show date before file');
 
