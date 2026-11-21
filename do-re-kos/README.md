@@ -8,13 +8,16 @@ Sesinle yönettiğin bir koşu oyunu. Tarayıcıda, telefonda ve bilgisayarda ç
 - Notayı tam tutturursan **Tam!** bonusu, seri yaptıkça çarpan (x4'e kadar).
 - **Nota kapısı:** yerden göğe duvar, yalnızca bir notanın hizasında açıklık var; o notayı söylemeden geçilmez (açıklık: Kolay ±70, Usta ±55, Pro ±40 cent).
 - **Çember:** uzun notalarda havada halka; notayı tutarak içinden geçersen bonus.
-- Bacalar, neon tabelalar ve çatı boşlukları da var: boşluk üstünde susarsan düşersin. Şarkıyı iyi bitirirsen +1 can.
+- Bacalar, neon tabelalar ve çatı boşlukları da var: boşluk üstünde susarsan düşersin. 
+- **Kademeli zorluk:** ilk şarkılarda kapılar geniş (±110 cent'ten başlar), büyük sıçramalardan hemen sonra ve cümle başı/sonunda kapı yok, sıçramaların etrafında baca/tabela yok, kapı notanın gerisinde. Şarkılar ilerledikçe açıklık daralır, hız ve engel sıklığı artar.
+- **Seri ödülleri:** her 10 doğru notada 🛡️ **kalkan** (bir çarpmayı can ve seri kaybetmeden karşılar), her 25 notada ⭐ **yıldız** (8 sn puanlar x2). 8 notalık seriden sonra x2, x3, x4 çarpan.
+- **Can:** bazı notalar ❤ can notasıdır; doğru söyleyip toplayınca +1 can (en fazla 5). Şarkıyı iyi bitirmek de +1 can verir. Canlar üstte görünür, çarpınca biri sallanarak söner.
 
 ## Tasarım
 
 1. **Ses ayarı (gerçek Do zorunlu):** Önce ortam gürültüsü ölçülür. Ekran doğrudan **gerçek Do (C)** ile açılır. Oyuncu aynısını söylemeden geçemez: kalın↔ince göstergesi ve “2 yarım ton daha kalın ↓ / çok az yükselt ↑ / Tam Do! Tut…” yönlendirmesiyle Do'ya getirilir; ±30 cent içinde 1.2 saniye tutunca baz tam C olur. Uzun süre olmazsa Do kendiliğinden tekrar çalınır; Do çok kalın/ince gelirse bir oktav değiştirilebilir. Hazır ayar kısayolu yoktur.
 2. **Zorluk:** Kolay 5 nota (±40 cent, ipucu sesi), Usta 8 nota (±30 cent, ipucu sesi), Pro 8 nota (±20 cent, ipucu sesi yok). İpucu sesi sıradaki notanın gerçek perdesini notaya varmadan biraz önce başlatır ve nota boyunca sürekli çalar; böylece tonu bulursun.
-3. **Şarkılar:** Merdiven, Mary'nin Kuzusu, Neşeye Övgü, Jingle Bells, Daha Dün Annemizin, Tembel Çocuk, Gam Merdiveni (kamu malı ezgiler). Liste bitince daha hızlı yeni tur başlar.
+3. **Şarkılar (kamu malı ezgiler, kolaydan zora):** Kolay: Merdiven, Ay Işığında, Mary'nin Kuzusu, Neşeye Övgü, Oh When the Saints, Jingle Bells. Usta/Pro: Gam Merdiveni, Daha Dün Annemizin, Neşeye Övgü, Old MacDonald, Tembel Çocuk, London Bridge, Oh When the Saints, Oh Susanna, Jingle Bells, Row Row Row Your Boat. Liste bitince daha hızlı yeni tur başlar.
 4. **Engeller** hep melodi yolunun dışında üretilir: notayı bir sonrakine kadar tutan bir şarkıcı hiç çarpmaz.
 
 ## Ses → hareket uyumu
