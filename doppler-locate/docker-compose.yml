@@ -1,8 +1,8 @@
 name: doppler-locate
 services:
   engine:
-    # Resmî yayınlanmış sürüm: uzun Docker build yerine hazır bilimsel motor
-    image: ghcr.io/leo-aa88/aerodoppler:v0.2.10
+    # Resmî GitHub Container Registry etiketi v öneki olmadan: 0.2.10
+    image: ghcr.io/leo-aa88/aerodoppler:0.2.10
     ports:
       - "127.0.0.1:8000:8000"
     volumes:
