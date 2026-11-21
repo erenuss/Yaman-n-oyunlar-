@@ -7,7 +7,7 @@ let file=null,mediaUrl=null,apiRoot='',apiReady=false,busy=false,ctx=null,analys
 let recordingId=null,foundEvents=[],inspectionComplete=false;
 function status(t,bad=false){$('status').textContent=t;$('status').classList.toggle('error',bad)}
 function setEngine(text,ready){apiReady=ready;$('engine-status').textContent=text;$('engine-status').className='pill '+(ready?'online':'offline');readyButton()}
-function readyButton(){$('locate').disabled=busy||!apiReady||!file||!inspectionComplete||!recordingId||!foundEvents.length||!$('region').value||!$('utc-date').value||!$('permission').checked||!$('download-consent').checked||(foundEvents.length===1&&$('clock').value!=='known')||($('clock').value==='known'&&!$('utc-time').value);}
+function readyButton(){$('locate').disabled=busy||!apiReady||!file||!inspectionComplete||!recordingId||!foundEvents.length||!$('region').value||($('region').value==='custom'&&!$('place-query').value.trim()&&!['west','south','east','north'].every(id=>$(id).value.trim()))||!$('utc-date').value||!$('permission').checked||!$('download-consent').checked||(foundEvents.length===1&&$('clock').value!=='known')||($('clock').value==='known'&&!$('utc-time').value);}
 function base(){return $('api-url').value.trim().replace(/\/$/,'')}
 function errorText(e){return e?.detail?.message||e?.detail||e?.error?.message||e?.message||String(e)}
 async function req(path,opts={}){let r;try{r=await fetch(apiRoot+path,{cache:'no-store',...opts})}catch(e){throw Error('Analiz motoruna erişilemiyor. Sunucu çevrimiçi, HTTPS ve CORS ayarları uygun olmalı.')}
@@ -17,6 +17,31 @@ const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 async function job(raw,label){const id=raw?.job_id||raw?.job?.job_id||raw?.id;if(!id){if(raw?.outcome==='exists')return raw;throw Error(label+': iş kimliği alınamadı')}for(;;){const j=await req('/api/jobs/'+encodeURIComponent(id));status(label+' · '+(j.stage||j.status)+'\n'+(j.progress?.message||'Uçuş arşivi ve hesaplama işlemi uzun sürebilir.'));if(TERMINAL.has(j.status)){if(j.status==='succeeded'||j.status==='abstained')return j;throw Error(label+' · '+errorText(j.error))}await sleep(3500)}}
 function stage(n){for(const d of document.querySelectorAll('.step')){const i=+d.dataset.i;d.classList.toggle('active',i===n);d.classList.toggle('done',i<n);d.querySelector('i').textContent=i<n?'✓':i===n?'◌':'○'}}
 function box(){const a=$('region').value==='custom'?['west','south','east','north'].map(id=>+$ (id).value):REGIONS[$('region').value];if(!a||a.some(x=>!Number.isFinite(x))||a[0]>=a[2]||a[1]>=a[3]||a[0]<-180||a[2]>180||a[1]<-90||a[3]>90)throw Error('Bölge koordinatları geçersiz');return {west:a[0],south:a[1],east:a[2],north:a[3]}}
+async function resolveBox(){
+ if($('region').value!=='custom')return box();
+ const q=$('place-query').value.trim();
+ if(!q)return box();
+ status('Belirttiğin şehir/bölgenin sınırları bulunuyor…');
+ let list;
+ try{
+   const url='https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&accept-language=tr&q='+encodeURIComponent(q);
+   const response=await fetch(url,{headers:{'Accept':'application/json'}});
+   if(!response.ok)throw Error('HTTP '+response.status);
+   list=await response.json();
+ }catch(e){throw Error('Bölge aranamadı ('+errorText(e)+'). Şehir adını kontrol et veya gelişmiş koordinat gir.');}
+ if(!Array.isArray(list)||!list.length)throw Error('“'+q+'” bulunamadı. Şehir, ilçe ve ülkeyi birlikte yazmayı dene.');
+ const b=list[0].boundingbox;
+ if(!Array.isArray(b)||b.length!==4)throw Error('Bölge koordinatları alınamadı.');
+ let [south,north,west,east]=b.map(Number);
+ if([south,north,west,east].some(x=>!Number.isFinite(x)))throw Error('Bölge sınırları geçersiz.');
+ // Çok küçük yerleşimler için ses eşleştirmesine yeterli arama alanı bırak.
+ const lat=(south+north)/2,lon=(west+east)/2;
+ if(north-south<0.10){south=lat-0.05;north=lat+0.05;}
+ if(east-west<0.10){west=lon-0.05;east=lon+0.05;}
+ south=Math.max(-90,south);north=Math.min(90,north);west=Math.max(-180,west);east=Math.min(180,east);
+ if(south>=north||west>=east)throw Error('Arama koordinatları geçersiz.');
+ return {south,north,west,east};
+}
 async function connect(){const v=base();if(v&&!/^https:\/\//i.test(v)&&!/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(v)){setEngine('Güvensiz sunucu adresi',false);$('connection-detail').textContent='Uzak motor bağlantısı HTTPS olmalıdır.';return}
 apiRoot=v;try{const h=await req('/health');setEngine('Motor bağlı · '+(h.version||'API'),true);$('connection-detail').textContent='Bağlantı başarılı. Analiz için dosya yüklenebilir.';if(v)localStorage.setItem('locatevideo-api-url',v)}catch(e){setEngine('Codespaces bağlantısı yok',false);$('connection-detail').textContent=errorText(e);if(location.hostname.endsWith('github.io'))$('connection-detail').textContent='Codespaces motoruna ulaşılamıyor. GitHub Codespaces açık olmalı, 7070 portunu Public yapmalısın. Codespace uyuduysa tekrar başlat.'}}
 
@@ -34,7 +59,7 @@ function useFile(f){
  $('media-wrap').hidden=false;$('analysis-panel').hidden=false;
  $('followup').hidden=true;$('results').hidden=true;$('events').hidden=true;
  $('utc-date').value='';$('utc-time').value='';$('region').value='';
- $('clock').value='unknown';$('time-fields').hidden=true;$('date-hint').textContent='Dosyadan tarih bulunamazsa gerçek çekim tarihini yaz.';stage(0);readyButton();
+ $('clock').value='unknown';$('time-fields').hidden=true;$('place-query').value='';$('date-hint').textContent='Dosyadan tarih bulunamazsa gerçek çekim tarihini yaz.';stage(0);readyButton();
  if(!apiReady){status('Dosya seçildi ama analiz motoru çevrimdışı. Bağlanınca analiz başlatılabilir.',true);return;}
  if(!$('permission').checked){status('Videonun analizine izin verdiğini onayla. Ardından uçak sesi otomatik aranacak.');return;}
  inspect();
@@ -131,7 +156,7 @@ async function analyze(){
  if(busy||!apiReady||!inspectionComplete||!recordingId||!foundEvents.length)return;
  busy=true;readyButton();$('results').hidden=true;
  try{
-   const b=box(),known=$('clock').value==='known',day=$('utc-date').value;
+   const b=await resolveBox(),known=$('clock').value==='known',day=$('utc-date').value;
    if(!day)throw Error('Gerçek UTC çekim tarihi gerekli.');
    if(!$('region').value)throw Error('Bu motorun uçuş arşivini sorgulaması için şehir/bölge gerekli.');
    if(foundEvents.length===1&&!known)throw Error('Tek uçak sesiyle çalışabilmek için çekim saati (UTC) de gerekiyor.');
@@ -165,7 +190,7 @@ function drawPlaceholder(){const canvas=$('spectrum'),g=canvas.getContext('2d');
 window.addEventListener('DOMContentLoaded',async()=>{drawPlaceholder();const hosted=location.hostname.endsWith('github.io');$('pages-warning').hidden=!hosted;
 $('file').addEventListener('change',e=>useFile(e.target.files?.[0]));$('permission').addEventListener('change',()=>{if(file&&$('permission').checked&&apiReady&&!inspectionComplete&&!recordingId&&!busy)inspect();readyButton()});const drop=$('drop-zone');for(const evt of ['dragover','drop'])drop.addEventListener(evt,e=>e.preventDefault());drop.addEventListener('dragover',()=>drop.classList.add('drag'));drop.addEventListener('dragleave',()=>drop.classList.remove('drag'));drop.addEventListener('drop',e=>{drop.classList.remove('drag');useFile(e.dataTransfer?.files?.[0])});
 $('listen').addEventListener('click',()=>listen().catch(e=>status('Ses oynatma: '+errorText(e),true)));
-$('clock').addEventListener('change',()=>{$('time-fields').hidden=$('clock').value!=='known';readyButton()});$('region').addEventListener('change',()=>{$('bounds').hidden=$('region').value!=='custom'});for(const id of ['utc-date','utc-time','download-consent'])$(id).addEventListener('change',readyButton);
+$('clock').addEventListener('change',()=>{$('time-fields').hidden=$('clock').value!=='known';readyButton()});$('region').addEventListener('change',()=>{$('bounds').hidden=$('region').value!=='custom';readyButton()});$('place-query').addEventListener('input',readyButton);for(const id of ['west','south','east','north'])$(id).addEventListener('input',readyButton);for(const id of ['utc-date','utc-time','download-consent'])$(id).addEventListener('change',readyButton);
 $('locate').addEventListener('click',analyze);$('export').addEventListener('click',exportGeo);$('connect').addEventListener('click',connect);
 if(hosted){$('api-url').value=localStorage.getItem('locatevideo-api-url')||DEFAULT_CODESPACE_API;}
 await connect();if(apiReady&&file&&$('permission').checked&&!inspectionComplete)inspect()});
