@@ -1,3 +1,18 @@
+## LocateVideo'yu GitHub Pages üzerinden mevcut Codespace ile paylaşmak
+
+**Ayrı sunucu kurmaya gerek yok.** Bu repodaki statik Pages ekranı mevcut `effective-garbanzo` Codespace'inin **7070** portuna bağlanacak şekilde hazırlandı:
+
+- Paylaşım bağlantısı: https://erenuss.github.io/Yaman-n-oyunlar-/locatevideo/
+- Mevcut analiz motoru: https://effective-garbanzo-xjv9wp7g6w9264vp-7070.app.github.dev/
+- Motorun çalışması için Codespace açık olmalı.
+- VS Code **Bağlantı Noktaları / Ports** sekmesinde **7070 → sağ tık → Port Visibility → Public** yapılmalı. **8000 Private kalmalı.**
+- Mevcut Codespaces terminalinden bir kez `git pull && docker compose up -d --force-recreate web` çalıştırılmalı (Terminal halen `doppler-locate` klasöründeyse). Başka dizindeysen `cd doppler-locate && git pull && docker compose up -d --force-recreate web`.
+- Pages ekranında üstte **Motor bağlı** görünüyorsa tarayıcıdan upload ve analiz API'si Codespaces'e bağlanıyor. Bu, gerçek bir Doppler konum tahmininin başarıyla tamamlandığı anlamına gelmez; ayrıca gerçek kayıt testleri gerekir.
+
+**Sınırlar:** Bu geçici bir paylaşılabilir demo. Codespaces hareketsizlik süresi sonunda kapanır ve hizmet durur. Public port herhangi bir ziyaretçinin API'ye erişmesine yol açar. Nginx'te 256 MB video limiti ve temel yükleme/ithalat istek limitleri var, ancak kullanıcı bazında güvenli dosya izolasyonu ve kimlik doğrulama yok. Tanımadığın çok sayıda kişiyle paylaşılacak üretim sistemi olarak kullanılmamalı; Codespaces ücretsiz saat ve disk kotası tüketilir.
+
+---
+
 # LocateVideo
 
 Video ve ses dosyalarındaki uçak Doppler eğrilerini tarihsel ADS-B uçuşlarıyla eşleştiren deneysel araştırma uygulaması. Arayüz GitHub Pages'te (önizleme), gerçek fizik hesabı AeroDoppler (MIT) motorunda çalışır.
