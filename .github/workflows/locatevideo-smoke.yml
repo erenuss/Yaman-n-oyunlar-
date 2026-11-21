@@ -13,5 +13,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+      - name: Install FFmpeg for metadata-stripped MP4 test
+        run: sudo apt-get update -qq && sudo apt-get install -y ffmpeg
       - name: Verify Pages, Codespaces, real WAV upload and acoustic event detection
         run: python3 scripts/locatevideo-smoke.py
