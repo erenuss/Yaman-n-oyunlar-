@@ -34,16 +34,56 @@ function useFile(f){
  $('media-wrap').hidden=false;$('analysis-panel').hidden=false;
  $('followup').hidden=true;$('results').hidden=true;$('events').hidden=true;
  $('utc-date').value='';$('utc-time').value='';$('region').value='';
- $('clock').value='unknown';$('time-fields').hidden=true;stage(0);readyButton();
+ $('clock').value='unknown';$('time-fields').hidden=true;$('date-hint').textContent='Dosyadan tarih bulunamazsa gerçek çekim tarihini yaz.';stage(0);readyButton();
  if(!apiReady){status('Dosya seçildi ama analiz motoru çevrimdışı. Bağlanınca analiz başlatılabilir.',true);return;}
  if(!$('permission').checked){status('Videonun analizine izin verdiğini onayla. Ardından uçak sesi otomatik aranacak.');return;}
  inspect();
+}
+
+async function videoContainerDate(f){
+ // MP4/MOV: mvhd atom timestamp (not reliable proof of actual capture time).
+ if(!/\.(mp4|mov|m4v)$/i.test(f.name))return null;
+ const str=(bytes,i,n)=>String.fromCharCode(...bytes.slice(i,i+n));
+ let pos=0;
+ for(let k=0;k<100&&pos+8<=f.size;k++){
+   const head=new Uint8Array(await f.slice(pos,pos+16).arrayBuffer());
+   const h=new DataView(head.buffer);
+   let len=h.getUint32(0),type=str(head,4,4),offset=8;
+   if(len===1){if(head.length<16)return null;len=h.getUint32(8)*4294967296+h.getUint32(12);offset=16;}
+   else if(len===0)len=f.size-pos;
+   if(!Number.isSafeInteger(len)||len<offset||pos+len>f.size)return null;
+   if(type==='moov'){
+     const part=new Uint8Array(await f.slice(pos+offset,Math.min(pos+len,pos+offset+512*1024)).arrayBuffer());
+     let n=0;
+     while(n+32<=part.length){
+       const size=new DataView(part.buffer,part.byteOffset+n).getUint32(0);
+       if(size<8||n+size>part.length)break;
+       if(str(part,n+4,4)==='mvhd'){
+         const version=part[n+8],dv=new DataView(part.buffer,part.byteOffset+n+12);
+         const seconds=version===1?dv.getUint32(0)*4294967296+dv.getUint32(4):dv.getUint32(0);
+         const date=new Date((seconds-2082844800)*1000);
+         return Number.isFinite(date.getTime())&&date.getTime()>Date.UTC(1990,0,1)&&date.getTime()<Date.now()+86400000?date:null;
+       }
+       n+=size;
+     }
+     return null;
+   }
+   pos+=len;
+ }
+ return null;
 }
 async function inspect(){
  if(busy||!file||!apiReady||!$('permission').checked)return;
  busy=true;$('file').disabled=true;readyButton();
  try{
-   stage(1);status('Video yükleniyor ve ses ayrıştırılıyor…');
+   stage(1);status('Video inceleniyor, varsa kayıt tarihi okunuyor…');
+   const embedded=await videoContainerDate(file).catch(()=>null);
+   if(embedded){
+     $('utc-date').value=embedded.toISOString().slice(0,10);
+     $('utc-time').value=embedded.toISOString().slice(0,19);
+     $('date-hint').textContent='Dosyanın MP4/MOV oluşturulma tarihinden önerildi. Yeniden kaydedildiyse yanlış olabilir; gerçek çekim tarihini doğrula.';
+   }
+   status('Video yükleniyor ve ses ayrıştırılıyor…');
    const form=new FormData();
    form.append('file',file,file.name);
    form.append('owner_permission_confirmed','true');
@@ -75,7 +115,7 @@ async function inspect(){
    $('followup').hidden=false;
    if(foundEvents.length===1){
      $('clock').value='known';$('time-fields').hidden=false;
-     status('1 uçak sesi bulundu. Mevcut yöntemle konum aramak için çekim tarihi, UTC saati ve olası şehir/bölge gerekiyor.');
+     status('1 uçak sesi bulundu. Çekim tarihi, UTC saati ve olası şehir/bölge gerekiyor. Video içinden önerilen tarih/saat varsa doğruluğunu kontrol et.');
    }else{
      status(foundEvents.length+' uçak sesi bulundu. Çekim saati olmadan arama denenebilir. Yalnızca çekim tarihi ve olası şehir/bölge gerekiyor.');
    }
