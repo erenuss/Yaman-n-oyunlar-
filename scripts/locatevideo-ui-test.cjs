@@ -49,14 +49,14 @@ async function waitFor(check,label){
 (async()=>{
  await delay(20);
  w.eval(script);
- doc.dispatchEvent(new w.Event('DOMContentLoaded'));
+ w.dispatchEvent(new w.Event('DOMContentLoaded'));
  await delay(100);console.log('DIAGNOSTIC boot',JSON.stringify({readyState:doc.readyState,engine:doc.getElementById('engine-status').textContent,fetchCalls:calls,connect:typeof w.connect,draw:typeof w.drawPlaceholder}));
  await waitFor(()=>doc.getElementById('engine-status').textContent.includes('Motor bağlı'),'API connect');
  assert.ok(doc.getElementById('followup').hidden,'Should not show date before file');
 
  // The user chooses a video first; no uploads until permission is confirmed.
  const file=new w.File([new Uint8Array(1024)],'airplane.wav',{type:'audio/wav'});
- w.useFile(file);
+ const picker=doc.getElementById('file');Object.defineProperty(picker,'files',{configurable:true,value:[file]});picker.dispatchEvent(new w.Event('change'));
  assert.ok(doc.getElementById('followup').hidden,'Questions should still be hidden before audio detection');
  assert.ok(!calls.some(x=>x.url.endsWith('/api/recordings')),'Must not upload before user permission');
  doc.getElementById('permission').checked=true;
@@ -74,7 +74,7 @@ async function waitFor(check,label){
  doc.getElementById('download-consent').checked=true;
  for(const id of ['utc-date','utc-time','region','download-consent'])doc.getElementById(id).dispatchEvent(new w.Event('change'));
  assert.ok(!doc.getElementById('locate').disabled,'Search should be enabled when necessary values are present');
- await w.analyze();
+ doc.getElementById('locate').click();await waitFor(()=>!doc.getElementById('results').hidden,'search result panel');
  assert.ok(calls.some(x=>x.url.endsWith('/api/flight-datasets/import')),'Must query historical flights');
  assert.ok(!doc.getElementById('results').hidden,'Must show search results');
  console.log('PASS: Frontend opens upload-only, respects consent, detects audio first, asks missing fields, searches flights.');
