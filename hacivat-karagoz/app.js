@@ -15,104 +15,13 @@ const map01 = (v, a, b) => clamp((v - a) / (b - a), 0, 1);
 const ease = t => t < .5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
 const rnd = (a, b) => a + Math.random() * (b - a);
 
-let W = 800, H = 450, DPR = 1, S = 1;
+let W = 800, H = 450, DPR = 1, S = 1, footPad = 0;
 const settings = { sound: true, voice: true, pip: true };
 const testHooks = (window.__hk = { frames: 0, hands: 0, lastLines: [] });
 
 /* ------------------------------------------------------------------ ART */
-const P = d => new Path2D(d);
-const OUT = '#2a1206';
-
-const LEG = {
-  thigh: P('M-15,-4 C-21,18 -19,40 -11,60 L11,60 C19,40 21,18 15,-4 Z'),
-  shin: P('M-9,-4 C-11,14 -10,30 -9,46 L10,46 C11,30 11,14 9,-4 Z'),
-  shoe: P('M-12,42 L12,42 C22,46 32,50 43,45 C46,54 37,62 24,62 L-10,62 C-15,62 -16,50 -12,42 Z'),
-  cuff: P('M-11,36 L11,36 L12,46 L-12,46 Z')
-};
-const ARM = {
-  upper: P('M-10,-6 C-13,12 -11,28 -9,40 L9,40 C11,28 13,12 10,-6 C6,-10 -6,-10 -10,-6 Z'),
-  fore: P('M-8,-3 C-9,10 -8,22 -7,32 L7,32 C8,22 9,10 8,-3 Z'),
-  cuff: P('M-8,24 L8,24 L9,32 L-9,32 Z'),
-  hand: P('M-7,30 C-10,38 -6,47 1,48 C8,48 12,42 10,36 C14,37 17,35 15,31 C10,29 2,28 -7,30 Z')
-};
-
-const ART = {
-  karagoz: {
-    neck: [2, -110], shoulder: [-4, -94], hips: [[-7, 2], [8, 2]], jawPivot: [-6, -11],
-    c: { skin: '#eab07a', robe: '#e2a43a', vest: '#c0392b', trim: '#2c7d4a', belt: '#2c7d4a', belt2: '#f0c75a',
-      shalvar: '#c23b2c', shin: '#f1dfb4', shoe: '#c2312a', beard: '#1d0f08', hat: '#c43a2d', hat2: '#1d120c', band: '#f2e2b8', sleeve: '#2c7d4a', sleeveB: '#226a3d' },
-    robe: P('M2,-110 C16,-110 24,-102 26,-90 C30,-74 39,-54 39,-33 C39,-18 33,-10 26,-6 C30,14 34,30 35,46 L-33,46 C-31,28 -28,12 -24,-6 C-28,-40 -30,-74 -24,-96 C-18,-106 -8,-110 2,-110 Z'),
-    vest: P('M-24,-96 C-18,-106 -6,-110 4,-108 C11,-80 11,-50 7,-18 L-24,-14 C-28,-40 -29,-74 -24,-96 Z'),
-    vestF: P('M14,-106 C22,-98 28,-84 31,-70 C34,-58 36,-46 35,-36 L20,-30 C22,-58 20,-84 14,-106 Z'),
-    hemTrim: P('M-33,46 C-31,38 -30,34 -29,30 C-10,34 14,34 34,30 C34,36 35,40 35,46 Z'),
-    belt: P('M-25,-16 C-8,-11 12,-11 28,-17 L27,-3 C10,2 -8,2 -24,-2 Z'),
-    face: P('M-16,2 C-24,-12 -26,-30 -20,-44 L18,-46 C22,-41 24,-38 26,-36 C35,-33 40,-26 36,-20 C32,-17 28,-18 25,-17 L25,-12 C20,-9 14,-5 10,2 Z'),
-    ear: P('M-9,-30 C-15,-31 -16,-22 -11,-19 C-8,-18 -6,-22 -7,-26 Z'),
-    jaw: P('M25,-14 C30,-3 28,10 17,16 C7,22 -8,20 -15,11 C-18,5 -14,-2 -7,-6 C4,-11 14,-12 25,-14 Z'),
-    mous: P('M26,-18 C20,-17 14,-15 9,-10 C14,-11 20,-12 27,-14 Z'),
-    hatBand: P('M-27,-37 C-31,-51 -23,-62 -6,-64 C10,-66 23,-60 25,-46 L21,-41 C6,-45 -12,-43 -27,-37 Z'),
-    hat: P('M-24,-56 C-46,-68 -50,-100 -30,-111 C-10,-120 14,-108 16,-86 C17,-74 14,-64 10,-58 Z'),
-    hatTop: P('M-38,-103 C-44,-112 -34,-120 -28,-111 C-31,-109 -35,-106 -38,-103 Z'),
-    eye: [12, -33, 6.2], brow: P('M2,-41 Q12,-48 22,-41'),
-    lines: [P('M27,-25 q4,1 6,-1'), P('M-2,-20 q3,4 7,4')],
-    dotsIn: ['robe', 'shalvar'],
-    lines2: [P('M8,-106 C14,-70 14,-40 12,-16')]
-  },
-  hacivat: {
-    neck: [2, -112], shoulder: [-4, -96], hips: [[-7, 2], [8, 2]], jawPivot: [-4, -11],
-    c: { skin: '#ecb582', robe: '#b2352d', vest: '#2f8a4e', trim: '#e6b440', belt: '#e6b440', belt2: '#7a2a1c',
-      shalvar: '#2f8a4e', shin: '#efe0bb', shoe: '#d9a131', beard: '#3b1d0e', hat: '#2f8a4e', hat2: '#e6b440', band: '#f4e8cb', sleeve: '#b2352d', sleeveB: '#8e2a24' },
-    robe: P('M2,-112 C14,-111 22,-104 24,-92 C27,-70 26,-36 22,-8 C28,12 32,30 34,48 L-34,48 C-31,30 -28,12 -22,-8 C-27,-40 -29,-72 -24,-96 C-18,-108 -8,-112 2,-112 Z'),
-    vest: P('M-4,-110 C-18,-108 -28,-98 -30,-80 C-34,-50 -35,-10 -39,52 L-8,52 C-10,20 -8,-30 -4,-70 C-2,-90 0,-104 -4,-110 Z'),
-    vestF: P('M10,-110 C18,-104 22,-96 23,-88 C25,-70 24,-50 22,-30 L13,-30 C15,-60 14,-90 10,-110 Z'),
-    hemTrim: P('M-34,48 C-33,42 -32,38 -31,34 C-10,38 12,38 32,34 C33,38 34,42 34,48 Z'),
-    belt: P('M-23,-16 C-8,-11 10,-11 24,-16 L23,-3 C8,1 -8,1 -22,-3 Z'),
-    face: P('M-14,2 C-20,-10 -22,-26 -18,-40 L16,-44 C18,-39 20,-35 22,-33 C28,-30 33,-25 31,-21 C28,-19 25,-19 22,-18 C23,-15 24,-13 22,-11 L20,-8 C14,-6 10,-2 8,2 Z'),
-    ear: P('M-8,-28 C-14,-29 -15,-20 -10,-18 C-7,-17 -5,-21 -6,-24 Z'),
-    jaw: P('M21,-11 C25,-4 25,6 21,16 C18,24 14,32 9,44 C7,32 3,20 -3,11 C-7,6 -10,4 -13,2 C-4,-1 8,-5 21,-11 Z'),
-    mous: P('M23,-17 C17,-16 11,-13 6,-8 C12,-10 18,-11 26,-13 Z'),
-    hatBand: P('M-25,-37 C-27,-50 -21,-58 -6,-60 C8,-62 21,-58 23,-46 C23,-42 21,-40 19,-40 C4,-44 -10,-42 -25,-37 Z'),
-    hat: P('M-17,-56 C-24,-80 -19,-104 -2,-113 C15,-104 19,-80 13,-58 Z'),
-    hatTop: P('M-6,-112 C-6,-120 2,-120 2,-112 Z'),
-    eye: [11, -32, 3.6], brow: P('M3,-38 Q11,-42 19,-37'),
-    lines: [P('M24,-23 q3,1 4,-1'), P('M-1,-22 q3,3 6,3')],
-    dotsIn: ['robe', 'shalvar'],
-    lines2: [P('M12,-108 C16,-74 16,-40 14,-16')]
-  }
-};
-
-// "Zımba delikleri": ışığın geçtiği küçük delikler — bölge içinde ızgara ile otomatik dağıtılır.
-const probe = document.createElement('canvas').getContext('2d');
-function holesIn(path, step, inset, bx, rosette) {
-  const pts = [];
-  for (let y = bx[1], r = 0; y <= bx[3]; y += step, r++) {
-    for (let x = bx[0] + (r % 2 ? step / 2 : 0); x <= bx[2]; x += step) {
-      if (probe.isPointInPath(path, x, y) && probe.isPointInPath(path, x + inset, y) && probe.isPointInPath(path, x - inset, y) &&
-        probe.isPointInPath(path, x, y + inset) && probe.isPointInPath(path, x, y - inset)) {
-        pts.push([x, y, 1.6]);
-        if (rosette) for (let k = 0; k < 6; k++) pts.push([x + Math.cos(k / 6 * TAU) * 4.2, y + Math.sin(k / 6 * TAU) * 4.2, 1.1]);
-      }
-    }
-  }
-  return pts;
-}
-function holesAlong(path, bx, n, inset) { // kenar boyunca dizi
-  const pts = [];
-  for (let i = 0; i < n; i++) {
-    const x = lerp(bx[0], bx[2], i / (n - 1)), y = lerp(bx[1], bx[3], i / (n - 1));
-    if (probe.isPointInPath(path, x, y)) pts.push([x, y, inset]);
-  }
-  return pts;
-}
-for (const a of Object.values(ART)) {
-  a.hRobe = holesIn(a.robe, 17, 6, [-40, -100, 40, 26], true).filter(p => true);
-  a.hThigh = holesIn(LEG.thigh, 9, 3, [-20, 40, 20, 60], false);
-  a.hShin = holesIn(LEG.shin, 8, 3, [-10, 2, 10, 32], false);
-  a.hHat = holesIn(a.hat, 8, 3, [-48, -116, 18, -62], false);
-  a.hBelt = holesAlong(a.belt, [-20, -9, 22, -9], 9, 1.4);
-  a.hHem = holesAlong(a.hemTrim, [-28, 40, 30, 40], 12, 1.4);
-  a.hSleeve = holesIn(ARM.upper, 8, 3, [-10, 0, 10, 36], false);
-}
+import { ART, LEG, ARM, OUT, leather, dots, joint, drawTurban, drawBackdrop, makeLeather } from './art.js';
+const leatherPat = makeLeather(octx), bgPat = makeLeather(bctx);
 
 /* -------------------------------------------------------------- DIALOGUE */
 const SCRIPT = [
@@ -228,7 +137,7 @@ function say(p, text, opts = {}) {
 /* ------------------------------------------------------------------ PUPPET */
 class Puppet {
   constructor(kind, xFrac, facing) {
-    this.kind = kind; this.code = kind[0]; this.A = ART[kind];
+    this.kind = kind; this.code = kind[0]; this.A = ART[kind]; this.foreP = ARM.fore(ART[kind].fore);
     this.xFrac = xFrac; this.facing = facing; this.face = facing;
     this.x = 0; this.y = 0; this.vx = 0; this.vy = 0; this.tx = null; this.ty = null;
     this.bow = 0; this.bowV = 0; this.head = 0; this.headV = 0; this.jaw = 0; this.jawV = 0;
@@ -241,23 +150,23 @@ class Puppet {
     this.talkT = 0; this.bubble = null; this.punchT = 0; this.flipT = -1; this.flipDir = 1; this.hitCd = 0; this.flipCd = 0;
     this.knockX = 0; this.knockV = 0; this.head0 = [0, 0];
   }
-  get baseY() { return H * .955 - 122 * S; }
+  get baseY() { return H - Math.max(H * .035, footPad) - 116 * S; }
   place() { this.x = W * this.xFrac; this.y = this.baseY; this.tx = this.x; this.ty = this.y; }
   spring(k, target, stiff, damp, dt) { const v = k + 'V'; this[v] += ((target - this[k]) * stiff - this[v] * damp) * dt; this[k] += this[v] * dt; }
   talk() { say(this, nextLine(this.code)); sfx('tik'); }
   punch() {
     if (this.hitCd > 0) return; this.hitCd = .45; this.punchT = .42;
     const o = this.other, dx = o.x - this.x;
-    if (Math.sign(dx) === Math.sign(this.face) && Math.abs(dx) < 230 * S && Math.abs(o.y - this.y) < 150 * S) {
+    if (Math.sign(dx) === Math.sign(this.facing) && Math.abs(dx) < 230 * S && Math.abs(o.y - this.y) < 150 * S) {
       setTimeout(() => {
         o.knockV += Math.sign(dx) * 900 * S; o.rotV += Math.sign(dx) * 7; o.headV += Math.sign(dx) * 14;
-        sfx('tef'); fx.push({ type: 'pat', x: (this.x + o.x) / 2, y: this.y - 85 * S, t: 0 });
+        sfx('tef'); try { navigator.vibrate && navigator.vibrate(35); } catch (e) { } fx.push({ type: 'pat', x: (this.x + o.x) / 2, y: this.y - 85 * S, t: 0 });
         if (!o.bubble || o.bubble.t > .5) say(o, OUCH[o.code][Math.floor(Math.random() * 4)], { short: true });
         shake = .25;
       }, 120);
     } else sfx('whoosh');
   }
-  flip() { if (this.flipT >= 0 || this.flipCd > 0) return; this.flipT = 0; this.flipDir = this.face >= 0 ? 1 : -1; this.flipCd = 1; sfx('whoosh'); setTimeout(() => sfx('nareke'), 380); }
+  flip() { if (this.flipT >= 0 || this.flipCd > 0) return; this.flipT = 0; this.flipDir = this.facing >= 0 ? 1 : -1; this.flipCd = 1; sfx('whoosh'); setTimeout(() => sfx('nareke'), 380); }
   turn() { this.facing = -this.facing; this.turnHold = 1.6; }
 
   update(dt, t) {
@@ -305,9 +214,9 @@ class Puppet {
     // kol
     let arm = this.ctl.arm;
     if (this.punchT > 0) { const k = this.punchT / .42; arm = Math.max(arm, k > .6 ? 1.15 : k * 1.4); this.punchT -= dt; }
-    const shT = .12 - arm * 2.25 + lag * .5 - a * .35 * sn + fl * -2.2;
+    const shT = this.A.armRest[0] - arm * 1.9 + lag * .5 - a * .35 * sn + fl * -2.2;
     this.spring('sh', shT, 120, 8, dt);
-    this.spring('el', -.25 - arm * .5 + lag * .3, 130, 9, dt);
+    this.spring('el', this.A.armRest[1] - arm * .35 + lag * .3, 130, 9, dt);
     this.spring('shB', .2 + lag * .4 + a * .3 * sn, 90, 6, dt);
     // baş: hafif gecikmeli, konuşurken başını sallar
     const talking = this.talkT > 0;
@@ -321,7 +230,7 @@ class Puppet {
     let rotT = clamp(this.ctl.tilt * .15, -.2, .2) + clamp(vxu * .00012, -.12, .12);
     this.spring('rot', rotT, 90, 10, dt);
     this.spring('depth', this.ctl.depth, 40, 11, dt);
-    if (this.flipT >= 0) { this.flipT += dt / .8; if (this.flipT >= 1) { this.flipT = -1; dust(this.x, this.baseY + 118 * S); if (!this.bubble || this.bubble.t > 1) say(this, HOP[this.code][Math.floor(Math.random() * 3)], { short: true }); } }
+    if (this.flipT >= 0) { this.flipT += dt / .8; if (this.flipT >= 1) { this.flipT = -1; dust(this.x, this.baseY + 112 * S); if (!this.bubble || this.bubble.t > 1) say(this, HOP[this.code][Math.floor(Math.random() * 3)], { short: true }); } }
     if (this.bubble) { this.bubble.t += dt; if (this.bubble.t > this.bubble.dur) this.bubble = null; }
 
     // nefes
@@ -330,80 +239,76 @@ class Puppet {
   }
 
   draw(g, t) {
-    const A = this.A, c = A.c, F = this.face, sc = S * (1 + this.depth * .16);
+    const A = this.A, c = A.c, F = this.face, sc = S * (1 + this.depth * .16), pat = leatherPat;
     let rot = this.rot * Math.sign(this.facing), jump = 0;
     if (this.flipT >= 0) { const e = ease(this.flipT); rot += e * TAU * this.flipDir; jump = -Math.sin(this.flipT * Math.PI) * 110 * S; }
     g.save();
     g.translate(this.x + this.knockX, this.y - this.bob * S + this.breath * S * .3 + jump - 40 * S * this.depth);
     g.rotate(rot + clamp(this.knockV / S * .0002, -.3, .3));
-    g.translate(0, -60 * sc * 0); // pivot bel
     g.scale(sc * F, sc);
-    g.lineJoin = 'round'; g.lineCap = 'round'; g.strokeStyle = OUT; g.lineWidth = 2.3;
+    g.lineJoin = 'round'; g.lineCap = 'round';
 
     const leg = (hip, hipA, kneeA, back) => {
+      const sh = back ? shade(c.shalvar) : c.shalvar;
       g.save(); g.translate(hip[0], hip[1]); g.rotate(hipA);
-      part(g, LEG.thigh, back ? shade(c.shalvar) : c.shalvar); holes(g, A.hThigh);
-      g.translate(0, 56); g.rotate(kneeA);
-      part(g, LEG.shin, c.shin); holes(g, A.hShin, .55);
-      part(g, LEG.cuff, back ? shade(c.shalvar) : c.shalvar);
-      part(g, LEG.shoe, back ? shade(c.shoe) : c.shoe);
+      g.save(); g.translate(0, LEG.knee); g.rotate(kneeA);
+      leather(g, LEG.shin, sh, pat, { inset: 3 });
+      leather(g, LEG.shoe, back ? shade(c.shoe) : c.shoe, pat, { inset: 3 });
+      g.restore();
+      leather(g, LEG.thigh, sh, pat, { inset: 3.4 }); if (!back) dots(g, A.hShalvar, 1.3);
+      joint(g, 0, LEG.knee - 2);
       g.restore();
     };
     const arm = (sh, el, back) => {
+      const skin = back ? shade(c.skin, .88) : c.skin;
       g.save(); g.translate(A.shoulder[0], A.shoulder[1]); g.rotate(sh);
-      part(g, ARM.upper, back ? c.sleeveB : c.sleeve); if (!back) holes(g, A.hSleeve, .8);
-      g.translate(0, 38); g.rotate(el);
-      part(g, ARM.fore, back ? c.sleeveB : c.sleeve);
-      part(g, ARM.cuff, c.trim);
-      part(g, ARM.hand, back ? shade(c.skin) : c.skin);
+      g.save(); g.translate(0, ARM.elbow); g.rotate(el);
+      leather(g, this.foreP, skin, pat, { inset: 2.4 });
+      g.save(); g.translate(0, A.fore - 2);
+      leather(g, ARM.thumb, skin, pat, { dash: false, lw: 2 });
+      leather(g, ARM.hand, skin, pat, { dash: false, lw: 2.2 });
+      g.lineWidth = 1.3; g.strokeStyle = OUT; g.stroke(ARM.fingers);
+      g.restore(); g.restore();
+      leather(g, ARM.sleeve, back ? shade(c.jacket) : c.jacket, pat, { inset: 3 });
+      leather(g, ARM.cuff, c.trim, pat, { dash: false, lw: 2.2 });
+      joint(g, 0, ARM.elbow - 1, 2.8); joint(g, 0, 0);
       g.restore();
     };
     leg(A.hips[0], this.hipB, this.kneeB, true);
     leg(A.hips[1], this.hipF, this.kneeF, false);
-    g.save(); g.rotate(this.bow);
-    arm(this.shB, -.35, true);
-    part(g, A.robe, c.robe); holes(g, A.hRobe);
-    part(g, A.vest, c.vest); part(g, A.vestF, c.vest);
-    for (const l of A.lines2) { g.save(); g.strokeStyle = c.trim; g.lineWidth = 3; g.stroke(l); g.restore(); }
-    part(g, A.hemTrim, c.trim); holes(g, A.hHem);
-    part(g, A.belt, c.belt); holes(g, A.hBelt);
+    g.save(); g.rotate(this.bow + A.hunch);
+    arm(A.backArm[0] + this.shB * .25, A.backArm[1] + this.jaw * .8, true);
+    leather(g, A.skirt, c.skirt, pat); dots(g, A.hSkirt);
+    leather(g, A.skirtHem, c.hem, pat, { inset: 2.6 });
+    leather(g, A.jacket, c.jacket, pat);
+    leather(g, A.front, c.trim, pat, { inset: 2.4 });
+    leather(g, A.hem, c.trim, pat, { inset: 2.4 });
+    leather(g, A.collar, c.trim, pat, { inset: 2.4 });
+    leather(g, A.sash, c.sash, pat, { inset: 2.6 }); dots(g, A.hSash, 1.15);
+    leather(g, A.sashEnd, c.sash2, pat, { inset: 2.4 });
     // baş
-    g.save(); g.translate(A.neck[0], A.neck[1]); g.rotate(this.head); g.scale(1.24, 1.24); g.lineWidth = 2.3 / 1.24;
-    part(g, A.face, c.skin); part(g, A.ear, shade(c.skin));
+    g.save(); g.translate(A.neck[0], A.neck[1]); g.rotate(this.head); g.scale(1.1, 1.1);
+    leather(g, A.face, c.skin, pat, { inset: 3 });
+    leather(g, A.ear, shade(c.skin, .86), pat, { dash: false, lw: 2 });
+    leather(g, A.eye, '#fffaf0', null, { dash: false, lw: 1.8 });
+    const [ix, iy, ir] = A.iris; g.fillStyle = '#120804'; g.beginPath(); g.arc(ix, iy, ir, 0, TAU); g.fill();
+    dots(g, [[ix + ir * .35, iy - ir * .35, ir * .28]]);
+    g.strokeStyle = OUT; g.lineWidth = 2.8; g.stroke(A.lid); g.lineWidth = 4.2; g.stroke(A.brow);
+    g.lineWidth = 1.6; for (const l of A.lines) g.stroke(l);
     g.save(); g.translate(A.jawPivot[0], A.jawPivot[1]); g.rotate(this.jaw); g.translate(-A.jawPivot[0], -A.jawPivot[1]);
-    part(g, A.jaw, c.beard); g.restore();
-    part(g, A.mous, c.beard);
-    // göz
-    const [ex, ey, er] = A.eye;
-    g.fillStyle = '#fff8e6'; g.beginPath(); g.ellipse(ex, ey, er * 1.25, er, 0, 0, TAU); g.fill(); g.stroke();
-    g.fillStyle = '#140904'; g.beginPath(); g.arc(ex + er * .35, ey + .3, er * .55, 0, TAU); g.fill();
-    g.save(); g.lineWidth = 3; g.stroke(A.brow); g.restore();
-    for (const l of A.lines) g.stroke(l);
-    // kavuk
-    part(g, A.hat, c.hat);
-    g.save(); g.clip(A.hat); g.strokeStyle = c.hat2; g.lineWidth = 5;
-    for (let i = -6; i < 6; i++) { g.beginPath(); g.moveTo(-40 + i * 11, -50); g.lineTo(-10 + i * 11, -120); g.stroke(); }
-    g.restore(); g.stroke(A.hat); holes(g, A.hHat, .7);
-    part(g, A.hatTop, c.hat2);
-    part(g, A.hatBand, c.band);
-    g.save(); g.clip(A.hatBand); g.strokeStyle = shade(c.band, .78); g.lineWidth = 2;
-    for (let i = -8; i < 8; i++) { g.beginPath(); g.moveTo(-30 + i * 7, -36); g.lineTo(-22 + i * 7, -66); g.stroke(); }
-    g.restore(); g.stroke(A.hatBand);
-    // baş konumu (balon için)
+    leather(g, A.jaw, c.beard, null, { dashColor: '#6f98a0', inset: 3 }); dots(g, A.hBeard, 1.25, 'rgba(150,200,210,.85)');
+    g.restore();
+    leather(g, A.mous, c.beard, null, { dash: false, lw: 2 });
+    drawTurban(g, A, pat);
     const m = g.getTransform(); this.headScreen = [m.e / DPR, m.f / DPR];
-    g.restore(); g.lineWidth = 2.3;
+    g.restore();
+    joint(g, A.shoulder[0], A.shoulder[1] + 4, 2.6);
     arm(this.sh, this.el, false);
     g.restore();
     g.restore();
   }
 
-  hitTest(px, py) { return Math.abs(px - this.x) < 75 * S && py > this.y - 240 * S && py < this.y + 125 * S; }
-}
-function part(g, path, fill) { g.fillStyle = fill; g.fill(path); g.stroke(path); }
-function holes(g, pts, a = 1) {
-  if (!pts || !pts.length) return;
-  g.save(); g.fillStyle = `rgba(255,247,222,${.92 * a})`;
-  g.beginPath(); for (const p of pts) { g.moveTo(p[0] + p[2], p[1]); g.arc(p[0], p[1], p[2], 0, TAU); } g.fill(); g.restore();
+  hitTest(px, py) { return Math.abs(px - this.x) < 85 * S && py > this.y - 250 * S && py < this.y + 125 * S; }
 }
 const shadeCache = {};
 function shade(hex, f = .8) {
@@ -441,78 +346,8 @@ function drawFx(g, dt) {
 /* ------------------------------------------------------------------ BACKDROP */
 function buildBackdrop() {
   backdrop.width = stage.width; backdrop.height = stage.height;
-  const g = bctx; g.setTransform(DPR, 0, 0, DPR, 0, 0);
-  // perde: arkadan yanan kumaş
-  const grd = g.createRadialGradient(W * .5, H * .42, 10, W * .5, H * .5, Math.max(W, H) * .75);
-  grd.addColorStop(0, '#fff8e2'); grd.addColorStop(.45, '#f7e3b2'); grd.addColorStop(.8, '#e6c182'); grd.addColorStop(1, '#c69455');
-  g.fillStyle = grd; g.fillRect(0, 0, W, H);
-  // dokuma
-  g.globalAlpha = .045; g.fillStyle = '#5a3210';
-  for (let y = 0; y < H; y += 3) g.fillRect(0, y, W, 1);
-  for (let x = 0; x < W; x += 3) g.fillRect(x, 0, 1, H);
-  g.globalAlpha = 1;
-  g.globalCompositeOperation = 'multiply';
-  const u = Math.min(H * .0019, W * .0017);
-  drawTree(g, W * .02, H * .985, u);
-  drawKosk(g, W * .985, H * .985, u);
-  drawBunting(g, u);
-  g.globalCompositeOperation = 'source-over';
-  // alt kenar gölgesi + vinyet
-  const v = g.createLinearGradient(0, H * .9, 0, H); v.addColorStop(0, 'rgba(60,30,8,0)'); v.addColorStop(1, 'rgba(60,30,8,.35)');
-  g.fillStyle = v; g.fillRect(0, H * .9, W, H * .1);
-}
-function drawTree(g, x, y, u) { // göstermelik: selvi + çiçekli ağaç
-  g.save(); g.translate(x, y); g.scale(u, u); g.lineJoin = 'round'; g.strokeStyle = OUT; g.lineWidth = 2.4;
-  const p = (d, f) => { const pa = P(d); g.fillStyle = f; g.fill(pa); g.stroke(pa); return pa; };
-  p('M30,0 C34,-60 26,-120 36,-170 L50,-170 C58,-120 52,-60 58,0 Z', '#7a4a24');
-  p('M44,-150 C10,-180 0,-250 44,-330 C88,-250 78,-180 44,-150 Z', '#2f7d45');
-  const leaves = [[-10, -190, 34, 22, '#3f9150'], [90, -200, 36, 24, '#3f9150'], [-20, -240, 28, 20, '#2a6e3c'], [100, -250, 30, 20, '#2a6e3c'], [60, -280, 26, 18, '#3f9150']];
-  for (const [lx, ly, rx, ry, cc] of leaves) { g.fillStyle = cc; g.beginPath(); g.ellipse(lx + 10, ly, rx, ry, -.4, 0, TAU); g.fill(); g.stroke(); }
-  g.globalCompositeOperation = 'source-over';
-  for (const [fx_, fy] of [[-14, -200], [96, -212], [-24, -246], [110, -256], [64, -290], [40, -230], [20, -270]]) {
-    g.fillStyle = '#c0392b'; g.beginPath(); for (let k = 0; k < 5; k++) { const a = k / 5 * TAU; g.ellipse(fx_ + 10 + Math.cos(a) * 6, fy + Math.sin(a) * 6, 5, 4, a, 0, TAU); } g.fill(); g.stroke();
-    g.fillStyle = '#f2c94c'; g.beginPath(); g.arc(fx_ + 10, fy, 3.5, 0, TAU); g.fill();
-  }
-  g.globalCompositeOperation = 'multiply';
-  g.fillStyle = 'rgba(255,247,222,.9)';
-  for (let i = 0; i < 9; i++) { g.beginPath(); g.arc(44 + Math.sin(i) * 8, -180 - i * 16, 2, 0, TAU); g.fill(); }
-  p('M0,0 C-4,-20 4,-34 18,-36 L72,-36 C86,-34 92,-20 88,0 Z', '#b5562d');
-  g.fillStyle = 'rgba(255,247,222,.9)'; for (let i = 0; i < 7; i++) { g.beginPath(); g.arc(12 + i * 11, -18, 2.2, 0, TAU); g.fill(); }
-  g.restore();
-}
-function drawKosk(g, x, y, u) { // göstermelik: köşk
-  g.save(); g.translate(x, y); g.scale(-u, u); g.lineJoin = 'round'; g.strokeStyle = OUT; g.lineWidth = 2.4;
-  const p = (d, f) => { const pa = P(d); g.fillStyle = f; g.fill(pa); g.stroke(pa); return pa; };
-  p('M0,0 L0,-210 L120,-210 L120,0 Z', '#d99a3a');
-  p('M-14,-205 L134,-205 L120,-232 L0,-232 Z', '#9c3a22');
-  p('M10,-232 C10,-280 110,-280 110,-232 Z', '#2f7d45');
-  p('M57,-276 L63,-276 L62,-300 L58,-300 Z', '#e6b440');
-  g.fillStyle = '#e6b440'; g.beginPath(); g.arc(60, -304, 5, 0, TAU); g.fill(); g.stroke();
-  p('M128,0 L128,-300 L146,-300 L146,0 Z', '#e8d3a0');
-  p('M124,-300 L150,-300 L137,-350 Z', '#9c3a22');
-  p('M121,-230 L153,-230 L150,-220 L124,-220 Z', '#9c3a22');
-  for (const [wx, wy] of [[16, -190], [68, -190], [16, -110], [68, -110]]) {
-    const w = p(`M${wx},${wy + 60} L${wx},${wy + 18} C${wx},${wy} ${wx + 36},${wy} ${wx + 36},${wy + 18} L${wx + 36},${wy + 60} Z`, '#3b2412');
-    g.save(); g.clip(w); g.strokeStyle = '#e6b440'; g.lineWidth = 2;
-    for (let i = -4; i < 8; i++) { g.beginPath(); g.moveTo(wx + i * 8, wy); g.lineTo(wx + i * 8 + 40, wy + 60); g.moveTo(wx + i * 8 + 40, wy); g.lineTo(wx + i * 8, wy + 60); g.stroke(); }
-    g.restore();
-  }
-  p('M44,0 L44,-40 C44,-56 76,-56 76,-40 L76,0 Z', '#5a2e14');
-  g.fillStyle = 'rgba(255,247,222,.9)'; for (let i = 0; i < 12; i++) { g.beginPath(); g.arc(8 + i * 9.5, -220, 1.8, 0, TAU); g.fill(); }
-  for (let i = 0; i < 18; i++) { g.beginPath(); g.arc(137, -20 - i * 15, 1.8, 0, TAU); g.fill(); }
-  g.restore();
-}
-function drawBunting(g, u) {
-  g.save(); g.strokeStyle = OUT; g.lineWidth = 1.6 * u;
-  const cols = ['#c0392b', '#2f7d45', '#e6b440', '#2a5d8f'];
-  const y0 = H * .045, sag = H * .05, n = Math.max(8, Math.round(W / (52 * u)));
-  g.beginPath(); g.moveTo(0, y0); g.quadraticCurveTo(W / 2, y0 + sag * 2, W, y0); g.stroke();
-  for (let i = 0; i < n; i++) {
-    const t = (i + .5) / n, x = t * W, y = y0 + sag * 4 * t * (1 - t) * .98 + 1, s = 15 * u;
-    g.fillStyle = cols[i % 4]; g.beginPath(); g.moveTo(x - s, y); g.lineTo(x + s, y); g.lineTo(x, y + s * 1.7); g.closePath(); g.fill(); g.stroke();
-    g.fillStyle = 'rgba(255,247,222,.9)'; g.beginPath(); g.arc(x, y + s * .55, 2.2 * u, 0, TAU); g.fill();
-  }
-  g.restore();
+  bctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  drawBackdrop(bctx, W, H, bgPat);
 }
 
 /* ------------------------------------------------------------------ BUBBLE */
@@ -556,7 +391,9 @@ function resize() {
   DPR = Math.min(window.devicePixelRatio || 1, 2); W = r.width; H = r.height;
   stage.width = Math.round(W * DPR); stage.height = Math.round(H * DPR);
   off.width = stage.width; off.height = stage.height;
-  S = Math.min(H * .0017, W * .0017);
+  S = Math.min(H * .00175, W * (W < H ? .0021 : .0017));
+  const tb = document.querySelector('.tbar'); footPad = tb && getComputedStyle(tb).display !== 'none' ? 60 : 0;
+  if (footPad) S = Math.min(S, (H - footPad) * .0019);
   buildBackdrop();
   for (const p of puppets) {
     if (p.tx === null) continue;
@@ -565,27 +402,45 @@ function resize() {
 }
 new ResizeObserver(resize).observe(stage);
 
-/* ------------------------------------------------------------------ INPUT: pointer */
-const drags = new Map(); let lastTap = { t: 0, p: null };
+/* ------------------------------------------------------------------ INPUT: pointer / touch */
+// sürükle: yürür · dokun: konuşur · çift dokun ya da yukarı fırlat: takla · yana hızlı fırlat: vurur
+const drags = new Map(); let lastTap = { t: 0, p: null }, tapTimer = null;
+const local = e => { const r = stage.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
 stage.addEventListener('pointerdown', e => {
-  const r = stage.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
-  audio();
-  let best = null, bd = 1e9;
-  for (const p of puppets) { const d = Math.abs(p.x - x) + (p.hitTest(x, y) ? 0 : 1000); if (d < bd) { bd = d; best = p; } }
-  if (!best || bd > 1000) best = Math.abs(karagoz.x - x) < Math.abs(hacivat.x - x) ? karagoz : hacivat;
-  const now = performance.now();
-  if (lastTap.p === best && now - lastTap.t < 320) best.flip();
-  lastTap = { t: now, p: best };
-  stage.setPointerCapture(e.pointerId);
-  drags.set(e.pointerId, { p: best, dx: best.x - x, dy: best.y - y });
-  best.src = 'pointer'; best.lostT = 0;
+  e.preventDefault(); audio();
+  const [x, y] = local(e);
+  let best = puppets.find(p => p.hitTest(x, y) && ![...drags.values()].some(d => d.p === p));
+  const hit = !!best;
+  if (!best) { const free = puppets.filter(p => ![...drags.values()].some(d => d.p === p)); if (!free.length) return; best = free.reduce((a, b) => Math.abs(a.x - x) < Math.abs(b.x - x) ? a : b); }
+  try { stage.setPointerCapture(e.pointerId); } catch (_) { }
+  const now = e.timeStamp || performance.now();
+  drags.set(e.pointerId, { p: best, hit, dx: hit ? best.x - x : 0, dy: best.y - y, x0: x, y0: y, t0: now, moved: false, sm: [[now, x, y]] });
+  if (!hit) { best.tx = x; } best.src = 'pointer'; best.lostT = 0;
 });
 stage.addEventListener('pointermove', e => {
   const d = drags.get(e.pointerId); if (!d) return;
-  const r = stage.getBoundingClientRect();
-  d.p.tx = e.clientX - r.left + d.dx; d.p.ty = e.clientY - r.top + d.dy; d.p.src = 'pointer'; d.p.lostT = 0;
+  const [x, y] = local(e), now = e.timeStamp || performance.now();
+  if (Math.hypot(x - d.x0, y - d.y0) > 12) d.moved = true;
+  d.sm.push([now, x, y]); if (d.sm.length > 8) d.sm.shift();
+  d.p.tx = x + d.dx; d.p.ty = y + d.dy; d.p.src = 'pointer'; d.p.lostT = 0;
 });
-const endDrag = e => { const d = drags.get(e.pointerId); if (d) { d.p.lostT = 0; drags.delete(e.pointerId); } };
+const endDrag = e => {
+  const d = drags.get(e.pointerId); if (!d) return; drags.delete(e.pointerId);
+  const now = e.timeStamp || performance.now(), p = d.p; p.lostT = 0;
+  if (e.type === 'pointercancel') return;
+  const l = d.sm[d.sm.length - 1];
+  let f = d.sm[0]; for (const q of d.sm) if (l[0] - q[0] <= 110) { f = q; break; }
+  if (f === l && d.sm.length > 1 && l[0] - d.sm[d.sm.length - 2][0] < 260) f = d.sm[d.sm.length - 2]; // seyrek olay gelen yavaş cihazlar
+  const still = now - l[0] > 200; // parmak durduktan sonra kalktıysa fırlatma sayılmaz
+  const dt = Math.max(16, l[0] - f[0]) / 1000, vx = still ? 0 : (l[1] - f[1]) / dt, vy = still ? 0 : (l[2] - f[2]) / dt;
+  testHooks.lastFlick = { vx: Math.round(vx), vy: Math.round(vy), gap: Math.round(now - l[0]), span: Math.round(l[0] - f[0]), dy: Math.round(l[2] - f[2]), n: d.sm.length };
+  if (!d.moved && now - d.t0 < 350) {
+    if (!d.hit) return;
+    if (lastTap.p === p && now - lastTap.t < 330) { clearTimeout(tapTimer); lastTap = { t: 0, p: null }; p.flip(); }
+    else { lastTap = { t: now, p }; tapTimer = setTimeout(() => p.talk(), 290); }
+  } else if (vy < -700 && -vy > Math.abs(vx) * 1.2) p.flip();
+  else if (Math.abs(vx) > 1000 && Math.abs(vx) > Math.abs(vy)) { p.facing = Math.sign(vx); p.turnHold = 1.2; p.punch(); }
+};
 stage.addEventListener('pointerup', endDrag); stage.addEventListener('pointercancel', endDrag);
 
 function act(p, a) { audio(); if (a === 'talk') p.talk(); else if (a === 'hit') p.punch(); else if (a === 'flip') p.flip(); else if (a === 'turn') p.turn(); }
@@ -625,10 +480,11 @@ async function startCamera() {
     console.error(e); msg.textContent = 'El takibi yüklenemedi. Dokunarak oynayabilirsin.'; btn.disabled = false; return;
   }
   camOn = true; testHooks.camReady = true;
+  if (coarse) enterFs();
   $('#intro').classList.add('hidden'); pip.classList.toggle('on', settings.pip);
   openingLines();
 }
-function startTouch() { audio(); unlockVoice(); $('#intro').classList.add('hidden'); openingLines(); flash('Kuklaları sürükle · çift dokun: takla · düğmelerle konuştur'); }
+function startTouch() { audio(); unlockVoice(); if (coarse) enterFs(); $('#intro').classList.add('hidden'); openingLines(); flash(coarse ? 'Sürükle: yürür · dokun: konuşur · yukarı fırlat: takla · yana fırlat: vurur' : 'Sürükle: yürür · tıkla: konuşur · çift tıkla: takla · yana fırlat: vurur', 5); }
 function unlockVoice() { if (settings.voice && 'speechSynthesis' in window) { try { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; speechSynthesis.speak(u); } catch (e) { } } }
 let opened = false;
 function openingLines() { if (opened) return; opened = true; sfx('nareke'); setTimeout(() => say(hacivat, nextLine('h')), 700); }
@@ -716,11 +572,22 @@ function toggle(btn, key, after) { btn.addEventListener('click', () => { setting
 toggle($('#bSound'), 'sound');
 toggle($('#bVoice'), 'voice', () => { if (!settings.voice && 'speechSynthesis' in window) speechSynthesis.cancel(); });
 toggle($('#bPip'), 'pip', () => pip.classList.toggle('on', settings.pip && camOn));
-$('#bFull').addEventListener('click', () => {
+// Tam ekran: destekleyen tarayıcıda gerçek, iPhone Safari'de sayfayı kaplayan sahne
+const coarse = matchMedia('(pointer: coarse)').matches;
+let realFs = false;
+function enterFs() {
+  document.body.classList.add('fs'); window.scrollTo(0, 0);
   const f = $('#frame');
-  if (document.fullscreenElement) document.exitFullscreen(); else if (f.requestFullscreen) f.requestFullscreen().then(() => { try { screen.orientation.lock('landscape'); } catch (e) { } }).catch(() => { });
-  else if (f.webkitRequestFullscreen) f.webkitRequestFullscreen();
-});
+  try { const pr = f.requestFullscreen ? f.requestFullscreen({ navigationUI: 'hide' }) : (f.webkitRequestFullscreen && f.webkitRequestFullscreen()); if (pr && pr.then) pr.then(() => { realFs = true; }).catch(() => { }); } catch (e) { }
+}
+function exitFs() {
+  document.body.classList.remove('fs');
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => { });
+  realFs = false;
+}
+document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && realFs) { realFs = false; document.body.classList.remove('fs'); } });
+$('#bFull').addEventListener('click', () => document.body.classList.contains('fs') ? exitFs() : enterFs());
+$('#bExit').addEventListener('click', exitFs);
 $('#bShot').addEventListener('click', () => {
   stage.toBlob(b => { if (!b) return; const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'hayal-perdesi.png'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); });
   sfx('tik'); flash('Fotoğraf kaydedildi 📸', 2);
@@ -751,8 +618,12 @@ function frame(now) {
   const steps = 2;
   for (let i = 0; i < steps; i++) for (const p of puppets) p.update(dt / steps, T);
   // gövdeler çarpışırsa birbirini it
-  const dx = hacivat.x - karagoz.x, minD = 70 * S;
-  if (Math.abs(dx) < minD && Math.abs(hacivat.y - karagoz.y) < 120 * S) { const push = (minD - Math.abs(dx)) * .5 * (Math.sign(dx) || 1); hacivat.knockX += push * .3; karagoz.knockX -= push * .3; }
+  const dx = hacivat.x - karagoz.x, minD = 92 * S;
+  if (Math.abs(dx) < minD && Math.abs(hacivat.y - karagoz.y) < 160 * S) { // gövdeler iç içe geçmesin
+    const push = (minD - Math.abs(dx)) * .5 * (Math.sign(dx) || (hacivat.xFrac > karagoz.xFrac ? 1 : -1));
+    hacivat.x += push; karagoz.x -= push;
+    const lo = 60 * S, hi = W - 60 * S; // kenara sıkışan itilemez; diğeri tümünü alır
+    for (const [p, q] of [[hacivat, karagoz], [karagoz, hacivat]]) { const c = clamp(p.x, lo, hi); q.x -= c - p.x; p.x = c; } if (Math.sign(hacivat.vx - karagoz.vx) !== Math.sign(push)) { hacivat.vx *= .5; karagoz.vx *= .5; } }
   render(dt);
   drawPip();
   testHooks.frames++;
@@ -764,7 +635,7 @@ function render(dt) {
   ctx.drawImage(backdrop, 0, 0);
   ctx.setTransform(DPR, 0, 0, DPR, sx * DPR, sy * DPR);
   // kandil titremesi
-  const fl = .045 + Math.sin(T * 7.3) * .012 + Math.sin(T * 13.1) * .008 + Math.sin(T * 2.1) * .01;
+  const fl = .03 + Math.sin(T * 7.3) * .01 + Math.sin(T * 13.1) * .008 + Math.sin(T * 2.1) * .01;
   ctx.fillStyle = `rgba(150,80,10,${fl})`; ctx.globalCompositeOperation = 'multiply'; ctx.fillRect(-10, -10, W + 20, H + 20); ctx.globalCompositeOperation = 'source-over';
   // kuklalar: önce ayrı katmana çiz, sonra perdeye "ışık geçiren deri" gibi bas
   octx.setTransform(1, 0, 0, 1, 0, 0); octx.clearRect(0, 0, off.width, off.height);
@@ -773,8 +644,8 @@ function render(dt) {
   for (const p of order) p.draw(octx, T);
   ctx.save(); ctx.setTransform(1, 0, 0, 1, sx * DPR, sy * DPR);
   const dep = Math.max(karagoz.depth, hacivat.depth);
-  ctx.globalCompositeOperation = 'multiply';
-  ctx.shadowColor = 'rgba(70,30,5,.45)'; ctx.shadowBlur = (6 + dep * 22) * DPR * S; ctx.shadowOffsetY = (2 + dep * 10) * DPR * S;
+  ctx.globalAlpha = .95; // ince deriden ışık hafifçe geçer
+  ctx.shadowColor = 'rgba(70,30,5,.4)'; ctx.shadowBlur = (6 + dep * 22) * DPR * S; ctx.shadowOffsetY = (2 + dep * 10) * DPR * S;
   ctx.drawImage(off, 0, 0);
   ctx.restore();
   ctx.setTransform(DPR, 0, 0, DPR, sx * DPR, sy * DPR);

@@ -30,6 +30,9 @@
       <canvas id="stage" aria-label="Karagöz perdesi"></canvas>
       <canvas id="pip" width="240" height="180" aria-hidden="true"></canvas>
       <div id="status" class="status" role="status"></div>
+      <div class="tbar k" aria-label="Karagöz düğmeleri"><button data-p="0" data-a="talk" aria-label="Karagöz konuşsun">💬</button><button data-p="0" data-a="hit" aria-label="Karagöz vursun">👊</button><button data-p="0" data-a="flip" aria-label="Karagöz takla atsın">🤸</button></div>
+      <div class="tbar h" aria-label="Hacivat düğmeleri"><button data-p="1" data-a="flip" aria-label="Hacivat takla atsın">🤸</button><button data-p="1" data-a="hit" aria-label="Hacivat vursun">👊</button><button data-p="1" data-a="talk" aria-label="Hacivat konuşsun">💬</button></div>
+      <button id="bExit" class="exitfs" aria-label="Tam ekrandan çık">✕</button>
 
       <div id="intro" class="overlay">
         <div class="card">
@@ -40,7 +43,7 @@
             <button id="bCam" class="primary">📷 Ellerimle oyna</button>
             <button id="bTouch" class="ghost">👆 Dokunarak / fareyle oyna</button>
           </div>
-          <p class="small">Görüntün yalnızca bu cihazda işlenir, hiçbir yere gönderilmez.</p>
+          <p class="small">📱 Telefonda kamerayla oynarken telefonu bir yere yasla, iki elin serbest kalsın. Görüntün yalnızca bu cihazda işlenir, hiçbir yere gönderilmez.</p>
           <p id="loadMsg" class="small load"></p>
         </div>
       </div>
@@ -79,6 +82,13 @@
       <li><span>↪️</span><b>Elini yana eğ</b> kukla eğilir, selam verir.</li>
       <li><span>🔄</span><b>Bileğini hızla çevir</b> kukla takla atar.</li>
       <li><span>🔍</span><b>Elini kameraya yaklaştır</b> kukla perdeden uzaklaşır, gölgesi büyür.</li>
+    </ul>
+    <h3 class="h2">Dokunarak / fareyle</h3>
+    <ul>
+      <li><span>👆</span><b>Kuklayı sürükle</b> yürür. İki parmakla ikisini birden oynatabilirsin.</li>
+      <li><span>💬</span><b>Kuklaya dokun</b> konuşur.</li>
+      <li><span>⬆️</span><b>Yukarı fırlat ya da çift dokun</b> takla atar.</li>
+      <li><span>↔️</span><b>Yana hızlıca fırlat</b> o yöne vurur.</li>
     </ul>
     <p class="tip">İpucu: Aydınlık bir yerde, kameradan bir kol boyu uzakta, iki elin de görünür olacak şekilde oyna. Telefonu yatay tutarsan perde büyür.</p>
   </section>

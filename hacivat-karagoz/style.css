@@ -94,3 +94,24 @@ footer{font-size:11px;color:#a68b68;text-align:center;margin:16px 0 0}
   .t2{display:none}
 }
 @media (pointer:coarse){.pad small{display:none}}
+
+/* sahne içi dokunmatik düğmeler */
+.tbar{position:absolute;bottom:max(8px,env(safe-area-inset-bottom));display:none;gap:6px;z-index:3}
+.tbar.k{left:max(8px,env(safe-area-inset-left))} .tbar.h{right:max(8px,env(safe-area-inset-right))}
+.tbar button{width:46px;height:46px;border-radius:50%;border:1.5px solid #e3b04b99;background:#2a1308b8;color:#fff;font-size:21px;line-height:1;padding:0;touch-action:manipulation;-webkit-user-select:none;user-select:none;box-shadow:0 3px 8px #0005}
+.tbar.k button{border-color:#ff8a73aa} .tbar.h button{border-color:#7fe08faa}
+.tbar button:active{transform:scale(.92);background:#5a2a12d0}
+.exitfs{display:none;position:absolute;top:max(8px,env(safe-area-inset-top));right:max(8px,env(safe-area-inset-right));z-index:4;width:40px;height:40px;border-radius:50%;border:1px solid #e3b04b99;background:#2a1308c0;color:#fff;font-size:18px;padding:0}
+.help h3.h2{margin-top:14px}
+@media (pointer:coarse){
+  .tbar{display:flex}
+  .pads{display:none}
+  #pip{top:10px;bottom:auto}
+}
+body.fs{overflow:hidden}
+body.fs .frame{position:fixed;inset:0;z-index:100;padding:0;border-radius:0;background:#000;box-shadow:none}
+body.fs .frame::before,body.fs .frame::after{display:none}
+body.fs .perde{width:100vw;height:100vh;height:100dvh;max-height:none;aspect-ratio:auto;border-radius:0}
+body.fs .exitfs{display:block}
+body.fs #pip{top:max(8px,env(safe-area-inset-top));right:60px}
+body.fs .tbar{display:flex}
