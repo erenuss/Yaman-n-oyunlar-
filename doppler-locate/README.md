@@ -15,14 +15,14 @@ Video taraması dosyaya dağılmış en fazla beş kare seçer, birbirine çok b
 
 - Fotoğraf, video veya ses seçilince analiz başlar. EXIF okunabilen HEIC görselleri desteklenir. Tarayıcı görüntüyü doğal olarak açamazsa HEIC dönüştürücü indirilir. Video oynatma ve sesi yerelde çözebilme, cihazın codec desteğine bağlıdır.
 - Görüntüler, kareler ve OCR metni cihazda işlenir. JS, WASM ve yapay zekâ modelleri ihtiyaç oldukça indirilir. Harita kullanıcı açtığında OpenStreetMap'e istek yapar. Yerel listede bulunmayan tanınmış yapıların adları, harita koordinatı için Wikipedia'da aranabilir.
-- Hızlı analiz bir yer bulamazsa geniş yapı taraması normal bağlantıda başlar. Veri tasarrufu bildiren bağlantılarda düğmeyle başlatılabilir. İlk tam tarama altı bölgesel model için toplam yaklaşık 260 MB indirebilir. İlk güçlü eşleşmede durur; kullanıcı da istediği zaman durdurabilir. Referans benzerliği ve model skorları konum olasılığı olarak sunulmaz.
+- Hızlı analiz bir yer bulamazsa geniş yapı taraması normal bağlantıda başlar. Veri tasarrufu bildiren bağlantılarda ve bağlantı türünü bildirmeyen dokunmatik cihazlarda düğmeyle başlatılabilir. İlk tam tarama altı bölgesel model için toplam yaklaşık 260 MB indirebilir. İlk güçlü eşleşmede durur; kullanıcı da istediği zaman durdurabilir. Referans benzerliği ve model skorları konum olasılığı olarak sunulmaz.
 - Uçak sesi sınıflandırması sesin duyulduğu yeri vermez. Yerel tarama belleği korumak için en fazla 55 MB dosyada, bilinen süre 10 dakikayı aşmıyorsa, kayda yayılmış en fazla 28 kısa aralığı inceler. Daha büyük dosya, 256 MB sunucu sınırı içinde motorla incelenebilir.
 - Dosya yalnızca **İzin ver ve geçişleri ara** seçildiğinde seçili motor adresine yüklenir. Yeterli Doppler izi bulunursa UTC günü ve olası bölge gerekir. Tek geçiş ayrıca saat gerektirir. Zaman dilimi içeren çekim etiketi UTC'ye çevrilir. MP4 kapsayıcısının oluşturulma zamanı yalnızca bir öneridir. Arşiv indirme ayrı onay gerektirir ve sunucuda yaklaşık 3,5 GB kullanabilir. Sonuç yetersizse uygulama bir alan üretmez.
 - Motorun genel portu paylaşımlı bir demodur. Kullanıcı hesabı, dosya izolasyonu veya otomatik silme garantisi yoktur. GPS, OCR ve yapı analizi Codespaces kapalıyken de çalışır; ilk model indirmeleri internet gerektirir.
 
 ## Motoru çalıştırma
 
-[Mevcut Codespaces yapılandırmasıyla aç](https://codespaces.new/erenuss/Yaman-n-oyunlar-?devcontainer_path=.devcontainer%2Fdoppler-locate%2Fdevcontainer.json&quickstart=1). Pages, varsayılan olarak mevcut effective-garbanzo Codespace'inin 7070 portunu kullanır. Kendi kurulumun için **Nasıl çalışır? → Uçuş motoru bağlantısı** bölümünden adresi değiştirebilirsin. 7070 paylaşımda Public, gelişmiş motor portu 8000 Private kalmalıdır. Codespace durduğunda tarihsel uçuş eşleştirmesi durur.
+[GitHub Codespaces](https://github.com/codespaces) ekranından mevcut effective-garbanzo ortamını açabilirsin. Pages, varsayılan olarak mevcut effective-garbanzo Codespace'inin 7070 portunu kullanır. Kendi kurulumun için **Nasıl çalışır? → Uçuş motoru bağlantısı** bölümünden adresi değiştirebilirsin. 7070 paylaşımda Public, gelişmiş motor portu 8000 Private kalmalıdır. Codespace durduğunda tarihsel uçuş eşleştirmesi durur.
 
 ```sh
 cd doppler-locate

@@ -412,6 +412,7 @@ async function analyze(s) {
       const metered =
         connection?.saveData ||
         connection?.type === 'cellular' ||
+        (!connection?.type && window.matchMedia('(pointer: coarse)').matches) ||
         ['2g', 'slow-2g', '3g'].includes(connection?.effectiveType);
       if (!s.landmarks.length) {
         $('wide').hidden = false;

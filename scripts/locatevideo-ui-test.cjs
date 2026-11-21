@@ -191,13 +191,11 @@ async function main() {
       c.getContext('2d').drawImage(i, 0, 0, c.width, c.height);
       return c.toDataURL('image/jpeg', 0.78).split(',')[1];
     }, photo.toString('base64'));
-    await page
-      .locator('#file')
-      .setInputFiles({
-        name: 'unknown.jpg',
-        mimeType: 'image/jpeg',
-        buffer: Buffer.from(jpeg, 'base64'),
-      });
+    await page.locator('#file').setInputFiles({
+      name: 'unknown.jpg',
+      mimeType: 'image/jpeg',
+      buffer: Buffer.from(jpeg, 'base64'),
+    });
     await page.waitForFunction(
       () => document.querySelector('#candidates').textContent.includes('Eyfel Kulesi'),
       {},
@@ -251,10 +249,27 @@ async function main() {
       .locator('#file')
       .setInputFiles({ name: 'field-recording.wav', mimeType: 'audio/wav', buffer: aircraft });
     await page.waitForFunction(
-      () => document.querySelector('#sound-status').textContent.includes('benzeyen anlar'),
+      () => !document.querySelector('#sound-status').textContent.includes('inceleniyor'),
       {},
       { timeout: 60000 },
     );
+    const audioStatus = await page.locator('#sound-status').textContent();
+    if (!audioStatus.includes('benzeyen anlar')) {
+      const diagnostic = await page.evaluate(async (b64) => {
+        try {
+          const { aircraftSound } = await import('./lib/recognition.js');
+          const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+          return await aircraftSound(
+            new File([bytes], 'fixture.wav', { type: 'audio/wav' }),
+            5,
+            new AbortController().signal,
+          );
+        } catch (error) {
+          return String(error.stack || error);
+        }
+      }, aircraft.toString('base64'));
+      assert.fail(audioStatus + ' ' + JSON.stringify(diagnostic));
+    }
     assert(await page.locator('#flight-form').isHidden());
     assert.equal(posts.length, 0);
     console.log(
@@ -269,13 +284,11 @@ async function main() {
       x.fillRect(0, 0, 320, 180);
       return c.toDataURL().split(',')[1];
     });
-    await page
-      .locator('#file')
-      .setInputFiles({
-        name: 'istanbul.png',
-        mimeType: 'image/png',
-        buffer: Buffer.from(noSignal, 'base64'),
-      });
+    await page.locator('#file').setInputFiles({
+      name: 'istanbul.png',
+      mimeType: 'image/png',
+      buffer: Buffer.from(noSignal, 'base64'),
+    });
     await page.waitForFunction(
       () => document.querySelector('#verdict').textContent === 'Konum belirlenemedi',
     );

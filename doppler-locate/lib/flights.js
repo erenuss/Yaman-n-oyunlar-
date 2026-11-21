@@ -42,6 +42,11 @@ async function request(root, path, signal, options = {}) {
       signal: ctrl.signal,
     });
     const data = await response.json().catch(() => null);
+    if (path === '/health' && (!response.ok || data?.status !== 'ok')) {
+      throw Error(
+        'Uçuş motoruna ulaşılamadı. Mevcut Codespace açık ve 7070 portu erişilebilir olunca tekrar deneyebilirsin.',
+      );
+    }
     if (!response.ok || !data) throw Error(reason(data) + ' (HTTP ' + response.status + ').');
     return data;
   } catch (e) {
@@ -130,7 +135,9 @@ async function inspect() {
   if (!s || s.kind === 'image') return;
   $('inspect-air').disabled = true;
   try {
-    s.flightRoot = engine();
+    const root = engine();
+    if (s.flightRoot && s.flightRoot !== root) s.recording = null;
+    s.flightRoot = root;
     say(s, 'Uçuş motoruna bağlanılıyor…');
     const h = await request(s.flightRoot, '/health', s.signal);
     if (h.status !== 'ok') throw Error('Uçuş motoru hazır değil.');
@@ -217,7 +224,7 @@ async function searchBox(name, signal) {
       if (!res.ok) throw Error('Bölge sınırları alınamadı.');
       const places = await res.json();
       if (!places.length) throw Error('Bölge bulunamadı. Şehir ve ülke adını birlikte yaz.');
-      if (places.length > 1 && !cc)
+      if (places.length > 1 && (!cc || rows.length > 1))
         throw Error('Birden fazla bölge bulundu. Şehir ve ülke adını birlikte yaz.');
       const [south, north, west, east] = places[0].boundingbox.map(Number);
       values = [west, south, east, north];

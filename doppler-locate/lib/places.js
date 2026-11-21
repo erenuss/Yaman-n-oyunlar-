@@ -98,17 +98,22 @@ export function nearest(p, index) {
 }
 
 export function readPlaceNames(lines, index) {
-  const full =
-    ' ' +
-    lines
-      .filter((x) => x.confidence >= 65)
-      .map((x) => fold(x.text))
-      .join(' ') +
-    ' ';
-  const countryCodes = new Set(
-    [...index.countries]
-      .filter(([, terms]) => terms.some((t) => full.includes(' ' + t + ' ')))
-      .map((x) => x[0]),
+  // Country context applies to the same image or video frame as the place name.
+  const frameText = new Map();
+  for (const line of lines) {
+    if (line.confidence >= 65 && !directions.test(line.text) && !directions.test(fold(line.text))) {
+      frameText.set(line.time, (frameText.get(line.time) || ' ') + fold(line.text) + ' ');
+    }
+  }
+  const countriesByFrame = new Map(
+    [...frameText].map(([time, text]) => [
+      time,
+      new Set(
+        [...index.countries]
+          .filter(([, terms]) => terms.some((term) => text.includes(' ' + term + ' ')))
+          .map(([code]) => code),
+      ),
+    ]),
   );
   const matches = new Map();
   const segments = lines.flatMap((line) => {
@@ -119,6 +124,7 @@ export function readPlaceNames(lines, index) {
       : [line];
   });
   for (const line of segments) {
+    const countryCodes = countriesByFrame.get(line.time) || new Set();
     const clean = fold(line.text);
     if (
       line.confidence < 65 ||
