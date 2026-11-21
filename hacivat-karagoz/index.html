@@ -16,6 +16,7 @@
   <a class="back" href="../" aria-label="Oyunlara dön">‹</a>
   <h1><span class="t1">Hayâl Perdesi</span><span class="t2">Karagöz ile Hacivat</span></h1>
   <div class="tools">
+    <button id="bStr" class="chip" aria-pressed="true" title="İpli kukla modu: parmaklar uzuvları oynatır">🪢<span> İpler</span></button>
     <button id="bSound" class="chip" aria-pressed="true" title="Ses efektleri">🔊<span> Ses</span></button>
     <button id="bVoice" class="chip" aria-pressed="true" title="Repliklerin seslendirilmesi">🗣️<span> Seslendir</span></button>
     <button id="bPip" class="chip" aria-pressed="true" title="Kamera önizlemesi">📷<span> Önizleme</span></button>
@@ -38,7 +39,7 @@
         <div class="card">
           <div class="ornament">❦</div>
           <h2>Perde açılıyor!</h2>
-          <p class="lead">Sağ elin <b class="hc">Hacivat</b>, sol elin <b class="kc">Karagöz</b> olsun. Ellerini kameraya göster, kuklalar senin elinle oynasın.</p>
+          <p class="lead">Sağ elin <b class="hc">Hacivat</b>, sol elin <b class="kc">Karagöz</b> olsun. Her parmağın bir ip: parmağını büktükçe kuklanın kolu, bacağı, başı kalkar.</p>
           <div class="btns">
             <button id="bCam" class="primary">📷 Ellerimle oyna</button>
             <button id="bTouch" class="ghost">👆 Dokunarak / fareyle oyna</button>
@@ -74,12 +75,21 @@
   </section>
 
   <section class="help">
-    <h3>Ellerle nasıl oynanır?</h3>
+    <h3>🪢 İpli kukla: her parmak bir uzuv</h3>
     <ul>
-      <li><span>✋</span><b>Elini gezdir</b> kukla yürür, gittiği yöne döner, bacakları sallanır.</li>
+      <li><span>☝️</span><b>İşaret parmağını bük</b> ön kol kalkar. Yana açarsan kol öne arkaya gider.</li>
+      <li><span>👍</span><b>Başparmağını avucuna kat</b> arka kol kalkar.</li>
+      <li><span>🖕</span><b>Orta parmağını bük</b> kukla eğilir, selam verir.</li>
+      <li><span>💍</span><b>Yüzük parmağını bük</b> ön bacak kalkar.</li>
+      <li><span>🤙</span><b>Serçe parmağını bük</b> arka bacak kalkar. İkisini sırayla bükersen kukla adım atar.</li>
+      <li><span>✋</span><b>Elini gezdir</b> kukla yürür, bacakları iplerde sarkaç gibi sallanır.</li>
+    </ul>
+    <p class="tip">Perdede elin, kuklanın üstünde ters dönmüş bir kontrol eli olarak görünür: parmak uçlarından uzuvlara ipler iner. Üstteki 🪢 düğmesiyle ip modunu kapatıp eski serbest moda dönebilirsin.</p>
+    <h3 class="h2">Diğer el hareketleri</h3>
+    <ul>
       <li><span>🤏</span><b>Başparmakla işaret parmağını birleştir</b> kukla konuşur. Sırayla konuşturursan karşılıklı muhavere olur.</li>
-      <li><span>✊</span><b>Yumruk yap</b> kolunu kaldırır. Diğerine yakınken hızlıca yumruk yaparsan <i>“Pat!”</i></li>
-      <li><span>↪️</span><b>Elini yana eğ</b> kukla eğilir, selam verir.</li>
+      <li><span>✊</span><b>Diğerine yakınken hızlıca yumruk yap</b> <i>“Pat!”</i> diye vurur.</li>
+      <li><span>↪️</span><b>Elini yana eğ</b> kukla o yana yaslanır (ip modu kapalıyken eğilir).</li>
       <li><span>🔄</span><b>Bileğini hızla çevir</b> kukla takla atar.</li>
       <li><span>🔍</span><b>Elini kameraya yaklaştır</b> kukla perdeden uzaklaşır, gölgesi büyür.</li>
     </ul>

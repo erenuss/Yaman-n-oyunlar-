@@ -16,7 +16,7 @@ const ease = t => t < .5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
 const rnd = (a, b) => a + Math.random() * (b - a);
 
 let W = 800, H = 450, DPR = 1, S = 1, footPad = 0;
-const settings = { sound: true, voice: true, pip: true };
+const settings = { sound: true, voice: true, pip: true, strings: true };
 const testHooks = (window.__hk = { frames: 0, hands: 0, lastLines: [] });
 
 /* ------------------------------------------------------------------ ART */
@@ -143,6 +143,7 @@ class Puppet {
     this.bow = 0; this.bowV = 0; this.head = 0; this.headV = 0; this.jaw = 0; this.jawV = 0;
     this.hipB = 0; this.hipBV = 0; this.hipF = 0; this.hipFV = 0; this.kneeB = 0; this.kneeBV = 0; this.kneeF = 0; this.kneeFV = 0;
     this.sh = .1; this.shV = 0; this.el = -.2; this.elV = 0; this.shB = .1; this.shBV = 0;
+    this.bA = ART[kind].backArm[0]; this.bAV = 0; this.bE = ART[kind].backArm[1]; this.bEV = 0; this.att = {}; this.strOn = false; this.hand = null;
     this.rot = 0; this.rotV = 0; this.depth = 0; this.depthV = 0;
     this.phase = 0; this.walk = 0; this.idle = 0; this.turnHold = 0;
     this.ctl = { bow: 0, arm: 0, tilt: 0, depth: 0 };
@@ -201,22 +202,45 @@ class Puppet {
     this.walk += (wantWalk - this.walk) * Math.min(1, dt * (wantWalk > this.walk ? 8 : 3));
     this.phase += dt * clamp(4 + sp * .022, 4, 15) * (this.walk > .02 ? 1 : 0);
     const a = this.walk * .55, sn = Math.sin(this.phase);
+    // İp modu: parmak bükülünce ip çekilir, uzuv o noktaya doğru kalkar (2 kemikli IK)
+    const sc = this.ctl.str, strOn = settings.strings && !!sc && this.src === 'hand' && this.lostT < .5;
+    this.strOn = strOn;
+    let ikF, ikB, ikLF, ikLB;
+    if (strOn) {
+      const A = this.A, L2 = A.fore + 12, Fl = this.facing;
+      const fk = (t1, t2) => [-ARM.elbow * Math.sin(t1) - L2 * Math.sin(t1 + t2), ARM.elbow * Math.cos(t1) + L2 * Math.cos(t1 + t2)];
+      const rf = fk(A.armRest[0], A.armRest[1]), rb = fk(A.backArm[0], A.backArm[1]);
+      ikF = ik2(rf[0] + sc.latI * (1 - sc.cI) * Fl * 38 + sc.cI * 30, rf[1] - sc.cI * 135, ARM.elbow, L2, 1);
+      ikB = ik2(rb[0] + sc.latT * (1 - sc.cT) * Fl * 30 + sc.cT * 12, rb[1] - sc.cT * 120, ARM.elbow, L2, 1);
+      ikLF = ik2(sc.cR * 34, 95 - sc.cR * 64, LEG.knee, 42, -1);
+      ikLB = ik2(sc.cP * 34, 95 - sc.cP * 64, LEG.knee, 42, -1);
+    }
     const lag = clamp(axu * F * .00028, -.9, .9);
     const fl = this.flipT >= 0 ? Math.sin(this.flipT * Math.PI) : 0;
-    this.spring('hipF', a * sn + lag - fl * .9, 140, 9, dt);
-    this.spring('hipB', -a * sn + lag - fl * .7, 140, 9, dt);
-    this.spring('kneeF', a * .9 * Math.max(0, -Math.cos(this.phase)) + Math.max(0, lag) * .6 + fl * 1.6, 160, 10, dt);
-    this.spring('kneeB', a * .9 * Math.max(0, Math.cos(this.phase)) + Math.max(0, lag) * .6 + fl * 1.4, 160, 10, dt);
+    if (strOn && fl === 0) { // bacaklar ipte; yürürken hafif sarkaç
+      this.spring('hipF', ikLF[0] + .25 * a * sn + lag, 120, 8, dt);
+      this.spring('hipB', ikLB[0] - .25 * a * sn + lag, 120, 8, dt);
+      this.spring('kneeF', ikLF[1] + Math.max(0, lag) * .5, 140, 9, dt);
+      this.spring('kneeB', ikLB[1] + Math.max(0, lag) * .5, 140, 9, dt);
+    } else {
+      this.spring('hipF', a * sn + lag - fl * .9, 140, 9, dt);
+      this.spring('hipB', -a * sn + lag - fl * .7, 140, 9, dt);
+      this.spring('kneeF', a * .9 * Math.max(0, -Math.cos(this.phase)) + Math.max(0, lag) * .6 + fl * 1.6, 160, 10, dt);
+      this.spring('kneeB', a * .9 * Math.max(0, Math.cos(this.phase)) + Math.max(0, lag) * .6 + fl * 1.4, 160, 10, dt);
+    }
 
     // gövde eğilmesi / selam
-    const bowT = clamp(this.ctl.bow, -.45, .85) + (this.punchT > 0 ? .25 : 0) + this.walk * .08;
+    const bowT = (strOn ? sc.cM * .85 - .05 : clamp(this.ctl.bow, -.45, .85)) + (this.punchT > 0 ? .25 : 0) + this.walk * .08;
     this.spring('bow', bowT - fl * .5, 110, 12, dt);
     // kol
     let arm = this.ctl.arm;
     if (this.punchT > 0) { const k = this.punchT / .42; arm = Math.max(arm, k > .6 ? 1.15 : k * 1.4); this.punchT -= dt; }
     const shT = this.A.armRest[0] - arm * 1.9 + lag * .5 - a * .35 * sn + fl * -2.2;
-    this.spring('sh', shT, 120, 8, dt);
-    this.spring('el', this.A.armRest[1] - arm * .35 + lag * .3, 130, 9, dt);
+    const useIK = strOn && this.punchT <= 0 && fl === 0;
+    this.spring('sh', useIK ? ikF[0] + lag * .5 : shT, 120, 8, dt);
+    this.spring('el', useIK ? ikF[1] + lag * .2 : this.A.armRest[1] - arm * .35 + lag * .3, 130, 9, dt);
+    this.spring('bA', useIK ? ikB[0] + lag * .4 : this.A.backArm[0], 110, 8, dt);
+    this.spring('bE', useIK ? ikB[1] : this.A.backArm[1], 120, 9, dt);
     this.spring('shB', .2 + lag * .4 + a * .3 * sn, 90, 6, dt);
     // baş: hafif gecikmeli, konuşurken başını sallar
     const talking = this.talkT > 0;
@@ -248,10 +272,11 @@ class Puppet {
     g.scale(sc * F, sc);
     g.lineJoin = 'round'; g.lineCap = 'round';
 
+    const cap = (key, x, y) => { const q = new DOMPoint(x, y).matrixTransform(g.getTransform()); this.att[key] = [q.x / DPR, q.y / DPR]; };
     const leg = (hip, hipA, kneeA, back) => {
       const sh = back ? shade(c.shalvar) : c.shalvar;
       g.save(); g.translate(hip[0], hip[1]); g.rotate(hipA);
-      g.save(); g.translate(0, LEG.knee); g.rotate(kneeA);
+      g.save(); g.translate(0, LEG.knee); g.rotate(kneeA); cap(back ? 'lb' : 'lf', 0, 40);
       leather(g, LEG.shin, sh, pat, { inset: 3 });
       leather(g, LEG.shoe, back ? shade(c.shoe) : c.shoe, pat, { inset: 3 });
       g.restore();
@@ -264,7 +289,7 @@ class Puppet {
       g.save(); g.translate(A.shoulder[0], A.shoulder[1]); g.rotate(sh);
       g.save(); g.translate(0, ARM.elbow); g.rotate(el);
       leather(g, this.foreP, skin, pat, { inset: 2.4 });
-      g.save(); g.translate(0, A.fore - 2);
+      g.save(); g.translate(0, A.fore - 2); cap(back ? 'hb' : 'hf', 2, 10);
       leather(g, ARM.thumb, skin, pat, { dash: false, lw: 2 });
       leather(g, ARM.hand, skin, pat, { dash: false, lw: 2.2 });
       g.lineWidth = 1.3; g.strokeStyle = OUT; g.stroke(ARM.fingers);
@@ -277,7 +302,7 @@ class Puppet {
     leg(A.hips[0], this.hipB, this.kneeB, true);
     leg(A.hips[1], this.hipF, this.kneeF, false);
     g.save(); g.rotate(this.bow + A.hunch);
-    arm(A.backArm[0] + this.shB * .25, A.backArm[1] + this.jaw * .8, true);
+    arm(this.bA + this.shB * .25, this.bE + (this.strOn ? 0 : this.jaw * .8), true);
     leather(g, A.skirt, c.skirt, pat); dots(g, A.hSkirt);
     leather(g, A.skirtHem, c.hem, pat, { inset: 2.6 });
     leather(g, A.jacket, c.jacket, pat);
@@ -299,7 +324,7 @@ class Puppet {
     leather(g, A.jaw, c.beard, null, { dashColor: '#6f98a0', inset: 3 }); dots(g, A.hBeard, 1.25, 'rgba(150,200,210,.85)');
     g.restore();
     leather(g, A.mous, c.beard, null, { dash: false, lw: 2 });
-    drawTurban(g, A, pat);
+    drawTurban(g, A, pat); cap('head', A.rosette[0], A.rosette[1]);
     const m = g.getTransform(); this.headScreen = [m.e / DPR, m.f / DPR];
     g.restore();
     joint(g, A.shoulder[0], A.shoulder[1] + 4, 2.6);
@@ -348,6 +373,45 @@ function buildBackdrop() {
   backdrop.width = stage.width; backdrop.height = stage.height;
   bctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   drawBackdrop(bctx, W, H, bgPat);
+}
+
+/* ------------------------------------------------------------------ STRINGS */
+function ik2(tx, ty, L1, L2, s) { // s=1: dirsek geriye (kol), s=-1: diz öne (bacak)
+  const d = clamp(Math.hypot(tx, ty), Math.abs(L1 - L2) + 1, L1 + L2 - .5);
+  const th = Math.atan2(-tx, ty);
+  const a = Math.acos(clamp((L1 * L1 + d * d - L2 * L2) / (2 * L1 * d), -1, 1));
+  const b = Math.acos(clamp((L1 * L1 + L2 * L2 - d * d) / (2 * L1 * L2), -1, 1));
+  return [th + s * a, -s * (Math.PI - b)];
+}
+const STR = [[4, 'hb', 'cT'], [8, 'hf', 'cI'], [12, 'head', 'cM'], [16, 'lf', 'cR'], [20, 'lb', 'cP']];
+const HAND_CONN = [[0, 1], [1, 2], [2, 3], [3, 4], [0, 5], [5, 6], [6, 7], [7, 8], [5, 9], [9, 10], [10, 11], [11, 12], [9, 13], [13, 14], [14, 15], [15, 16], [13, 17], [17, 18], [18, 19], [19, 20], [0, 17]];
+// Kontrol eli: oyuncunun eli kuklanın üstünde, parmaklar aşağı; her parmak ucundan bir uzva ip iner
+function drawStrings(g, p) {
+  if (!p.strOn || !p.hand || !p.att.head) return;
+  const h = p.hand, k = 88 * S;
+  let wy = 0; for (const q of h.pts) wy = Math.max(wy, (q.y - h.cy) * h.flip / h.size); // bilek tarafı (ekranda üstte kalır)
+  const palmY = Math.max(p.y - 395 * S, wy * k + 10);
+  const G = q => [p.x + p.knockX + (q.x - h.cx) / h.size * k, palmY - (q.y - h.cy) * h.flip / h.size * k];
+  const P2 = h.pts.map(G);
+  g.save(); g.lineCap = 'round'; g.lineJoin = 'round'; g.setLineDash([]);
+  // ipler
+  for (const [tip, key, ck] of STR) {
+    const a = P2[tip], b = p.att[key]; if (!b) continue;
+    const t = p.ctl.str[ck] || 0;
+    g.strokeStyle = `rgba(${150 + t * 80 | 0},${40 + t * 30 | 0},25,${.55 + t * .35})`; g.lineWidth = 1.6 + t * 1.4;
+    g.beginPath(); g.moveTo(a[0], a[1]);
+    const sag = (1 - t) * 6 * S; // gevşek ip hafifçe sarkar
+    g.quadraticCurveTo((a[0] + b[0]) / 2 + sag, (a[1] + b[1]) / 2, b[0], b[1]); g.stroke();
+    g.fillStyle = 'rgba(120,30,20,.8)'; g.beginPath(); g.arc(b[0], b[1], 2.2, 0, TAU); g.fill();
+  }
+  // el iskeleti
+  const bones = () => { g.beginPath(); for (const [i, j] of HAND_CONN) { g.moveTo(P2[i][0], P2[i][1]); g.lineTo(P2[j][0], P2[j][1]); } };
+  g.strokeStyle = 'rgba(255,250,235,.75)'; g.lineWidth = Math.max(4, 6.5 * S); bones(); g.stroke(); // ışık hâlesi
+  g.strokeStyle = 'rgba(14,140,122,.95)'; g.lineWidth = Math.max(1.8, 2.8 * S); bones(); g.stroke();
+  g.fillStyle = '#fffaf0';
+  for (let i = 0; i < 21; i++) { g.beginPath(); g.arc(P2[i][0], P2[i][1], Math.max(1.6, 2.2 * S), 0, TAU); g.fill(); }
+  for (const [tip, , ck] of STR) { const t = p.ctl.str[ck] || 0, q = P2[tip]; g.fillStyle = t > .35 ? '#ffd65a' : '#ffffff'; g.strokeStyle = 'rgba(18,150,130,.95)'; g.lineWidth = 1.5; g.beginPath(); g.arc(q[0], q[1], Math.max(3, 4.5 * S) * (1 + t * .4), 0, TAU); g.fill(); g.stroke(); }
+  g.restore();
 }
 
 /* ------------------------------------------------------------------ BUBBLE */
@@ -489,19 +553,33 @@ function unlockVoice() { if (settings.voice && 'speechSynthesis' in window) { tr
 let opened = false;
 function openingLines() { if (opened) return; opened = true; sfx('nareke'); setTimeout(() => say(hacivat, nextLine('h')), 700); }
 
+const OPEN_REF = { 4: 1.05, 8: .85, 12: .9, 16: .85, 20: .7 }, openRef = { ...OPEN_REF };
 function features(lm) {
-  // aynalanmış koordinatlar (selfie görünümü)
-  const P_ = i => ({ x: 1 - lm[i].x, y: lm[i].y, z: lm[i].z });
-  const w = P_(0), m = P_(9), idx = P_(8), th = P_(4);
+  // aynalanmış koordinatlar (selfie görünümü); geometri için en-boy oranı düzeltilir
+  const asp = (video.videoWidth && video.videoHeight) ? video.videoWidth / video.videoHeight : 4 / 3;
+  const P_ = i => ({ x: (1 - lm[i].x) * asp, y: lm[i].y, z: lm[i].z });
+  const pts = lm.map((_, i) => P_(i));
+  const w = pts[0], m = pts[9], idx = pts[8], th = pts[4];
   const d = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
   const size = d(w, m) || .001;
-  let cx = 0, cy = 0; for (const i of [0, 5, 9, 13, 17]) { const q = P_(i); cx += q.x; cy += q.y; } cx /= 5; cy /= 5;
-  const tilt = Math.atan2(m.x - w.x, -(m.y - w.y)); // 0 = dik, + sağa
-  let curl = 0; for (const [tip, pip_] of [[8, 6], [12, 10], [16, 14], [20, 18]]) { curl += d(P_(tip), w) / Math.max(1e-3, d(P_(pip_), w)); }
+  let cx = 0, cy = 0; for (const i of [0, 5, 9, 13, 17]) { cx += pts[i].x; cy += pts[i].y; } cx /= 5; cy /= 5;
+  const up = m.y < w.y; // parmaklar yukarı mı (aşağı tutan da olur: gerçek kukla kontrolü gibi)
+  let tilt = Math.atan2(m.x - w.x, -(m.y - w.y)); // 0 = dik, + sağa
+  if (!up) tilt = Math.atan2(-(m.x - w.x), m.y - w.y); // aşağı bakan elde eğimi aşağıya göre ölç
+  let curl = 0; for (const [tip, pip_] of [[8, 6], [12, 10], [16, 14], [20, 18]]) { curl += d(pts[tip], w) / Math.max(1e-3, d(pts[pip_], w)); }
   curl /= 4; // açık ≈ 1.25+, yumruk ≈ < .95
   const fist = map01(1.18 - curl, 0, .32);
   const pinch = d(th, idx) / size;
-  return { x: cx, y: cy, size, tilt, fist, pinch };
+  // parmak başına bükülme (0 düz, 1 tam bükük) — kişinin eline göre kendini ayarlar
+  const ext = { 4: d(pts[4], pts[17]) / size, 8: d(pts[8], pts[5]) / size, 12: d(pts[12], pts[9]) / size, 16: d(pts[16], pts[13]) / size, 20: d(pts[20], pts[17]) / size };
+  const c = {};
+  for (const k in ext) {
+    openRef[k] = clamp(Math.max(openRef[k] * .9997, ext[k]), OPEN_REF[k] * .7, OPEN_REF[k] * 1.35);
+    c[k] = map01((openRef[k] - ext[k]) / openRef[k], .08, k === '4' ? .6 : .55);
+  }
+  const ax = { x: m.x - w.x, y: m.y - w.y };
+  const ang = (a, b) => { const v = { x: pts[b].x - pts[a].x, y: pts[b].y - pts[a].y }; return Math.atan2(ax.x * v.y - ax.y * v.x, ax.x * v.x + ax.y * v.y); };
+  return { x: 1 - (lm[0].x + lm[5].x + lm[9].x + lm[13].x + lm[17].x) / 5, y: cy, size, tilt, fist, pinch, pts, pcx: cx, pcy: cy, up, c, angI: ang(5, 8), angT: ang(2, 4) };
 }
 
 function processHands(res, dt) {
@@ -534,8 +612,15 @@ function processHands(res, dt) {
     const now = performance.now(), hdt = Math.max(.016, (now - prev.t) / 1000);
     p.ctl.arm = lerp(p.ctl.arm, f.fist, .5);
     p.ctl.tilt = lerp(p.ctl.tilt, clamp(f.tilt, -1.2, 1.2), .4);
-    p.ctl.bow = clamp(p.ctl.tilt * Math.sign(p.facing) * 1.1, -.45, .85);
-    p.ctl.depth = lerp(p.ctl.depth, map01(f.size, .13, .26), .2);
+    p.ctl.bow = settings.strings ? 0 : clamp(p.ctl.tilt * Math.sign(p.facing) * 1.1, -.45, .85);
+    p.ctl.depth = lerp(p.ctl.depth, map01(f.size / ((video.videoWidth && video.videoHeight) ? video.videoWidth / video.videoHeight : 1.333), .13, .26), .2);
+    // ip modu kontrolleri
+    const bI = prev.bI ?? f.angI, bT = prev.bT ?? f.angT; // yan açılma için yavaş taban çizgisi
+    const nbI = f.c[8] < .3 ? lerp(bI, f.angI, .02) : bI, nbT = f.c[4] < .3 ? lerp(bT, f.angT, .02) : bT;
+    const o = p.ctl.str || { cT: 0, cI: 0, cM: 0, cR: 0, cP: 0, latI: 0, latT: 0 }, sm = .55;
+    p.ctl.str = { cT: lerp(o.cT, f.c[4], sm), cI: lerp(o.cI, f.c[8], sm), cM: lerp(o.cM, f.c[12], sm), cR: lerp(o.cR, f.c[16], sm), cP: lerp(o.cP, f.c[20], sm),
+      latI: lerp(o.latI, clamp((f.angI - nbI) * 2, -1, 1), sm), latT: lerp(o.latT, clamp((f.angT - nbT) * 1.6, -1, 1), sm) };
+    p.hand = { pts: f.pts, cx: f.pcx, cy: f.pcy, size: f.size, flip: f.up ? 1 : -1 };
     // konuşma: parmak ucu birleşince
     const closed = prev.pinchClosed ? f.pinch < .55 : f.pinch < .32;
     if (closed && !prev.pinchClosed && f.fist < .5 && (!p.bubble || p.bubble.t > .6 || p.bubble.short)) p.talk();
@@ -545,7 +630,7 @@ function processHands(res, dt) {
     // bilek çevirme -> takla
     const dTilt = (f.tilt - prev.tilt) / hdt;
     if (Math.abs(f.tilt) > .7 && Math.abs(dTilt) > 4.5) p.flip();
-    handState.set(p, { pinchClosed: closed, fist: f.fist, tilt: f.tilt, t: now });
+    handState.set(p, { pinchClosed: closed, fist: f.fist, tilt: f.tilt, t: now, bI: nbI, bT: nbT });
   }
 }
 
@@ -570,6 +655,7 @@ let flashT = 0;
 function flash(text, secs = 3.5) { const s = $('#status'); s.textContent = text; s.classList.add('on'); flashT = secs; }
 function toggle(btn, key, after) { btn.addEventListener('click', () => { settings[key] = !settings[key]; btn.setAttribute('aria-pressed', settings[key]); after && after(); }); }
 toggle($('#bSound'), 'sound');
+toggle($('#bStr'), 'strings', () => flash(settings.strings ? '🪢 İpli kukla: parmaklarını bük, uzuvlar kalksın' : 'Serbest mod: yumrukla kol kaldır, eğerek selam ver', 3));
 toggle($('#bVoice'), 'voice', () => { if (!settings.voice && 'speechSynthesis' in window) speechSynthesis.cancel(); });
 toggle($('#bPip'), 'pip', () => pip.classList.toggle('on', settings.pip && camOn));
 // Tam ekran: destekleyen tarayıcıda gerçek, iPhone Safari'de sayfayı kaplayan sahne
@@ -649,10 +735,12 @@ function render(dt) {
   ctx.drawImage(off, 0, 0);
   ctx.restore();
   ctx.setTransform(DPR, 0, 0, DPR, sx * DPR, sy * DPR);
+  for (const p of puppets) drawStrings(ctx, p);
   drawFx(ctx, dt);
   for (const p of puppets) p._bb = null;
   for (const p of puppets) drawBubble(ctx, p);
 }
+testHooks.joints = () => { const p = karagoz, r = v => +v.toFixed(2); return { str: p.strOn, sh: r(p.sh), el: r(p.el), bA: r(p.bA), bE: r(p.bE), bow: r(p.bow), hipF: r(p.hipF), kneeF: r(p.kneeF), hipB: r(p.hipB), kneeB: r(p.kneeB), c: p.ctl.str && Object.fromEntries(Object.entries(p.ctl.str).map(([k, v]) => [k, r(v)])) }; };
 testHooks.inject = lms => processHands({ landmarks: lms }, .016);
 testHooks.start = () => startTouch();
 resize();
