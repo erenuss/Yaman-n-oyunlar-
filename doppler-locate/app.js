@@ -43,7 +43,7 @@ async function resolveBox(){
  return {south,north,west,east};
 }
 async function connect(){const v=base();if(v&&!/^https:\/\//i.test(v)&&!/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(v)){setEngine('Güvensiz sunucu adresi',false);$('connection-detail').textContent='Uzak motor bağlantısı HTTPS olmalıdır.';return}
-apiRoot=v;try{const h=await req('/health');setEngine('Motor bağlı · '+(h.version||'API'),true);$('connection-detail').textContent='Bağlantı başarılı. Analiz için dosya yüklenebilir.';if(v)localStorage.setItem('locatevideo-api-url',v)}catch(e){setEngine('Codespaces bağlantısı yok',false);$('connection-detail').textContent=errorText(e);if(location.hostname.endsWith('github.io'))$('connection-detail').textContent='Codespaces motoruna ulaşılamıyor. GitHub Codespaces açık olmalı, 7070 portunu Public yapmalısın. Codespace uyuduysa tekrar başlat.'}}
+apiRoot=v;try{const h=await req('/health');setEngine('Motor bağlı · '+(h.version||'API'),true);$('connection-detail').textContent='Bağlantı başarılı. Analiz için dosya yüklenebilir.';$('pages-warning').hidden=true;if(file&&$('permission').checked&&!inspectionComplete&&!recordingId&&!busy)inspect();if(v)localStorage.setItem('locatevideo-api-url',v)}catch(e){setEngine('Codespaces bağlantısı yok',false);$('connection-detail').textContent=errorText(e);if(location.hostname.endsWith('github.io'))$('pages-warning').hidden=false;if(location.hostname.endsWith('github.io'))$('connection-detail').textContent='Codespaces motoruna ulaşılamıyor. GitHub Codespaces açık olmalı, 7070 portunu Public yapmalısın. Codespace uyuduysa tekrar başlat.'}}
 
 function useFile(f){
  if(!f||busy)return;
