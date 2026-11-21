@@ -95,6 +95,15 @@ body.intro #top,body.intro #bottom,body.intro #tut{display:none!important}
 
 body[data-mode=theremin] #status{bottom:calc(env(safe-area-inset-bottom) + 186px)}
 body[data-mode=theremin] #toast{bottom:calc(env(safe-area-inset-bottom) + 230px)}
+/* ton seçici */
+.keylbl{font-family:var(--mono);font-size:13px;font-weight:600}
+.seg2{display:flex;gap:4px;padding:4px;border-radius:999px;background:var(--surf);margin:4px 0 14px}
+.seg2 button{flex:1;height:36px;border-radius:999px;font-weight:600;font-size:14px;color:var(--mut)}
+.seg2 button.on{background:var(--fg);color:#0a0a0b}
+.keygrid{display:grid;grid-template-columns:repeat(6,1fr);gap:6px}
+.keygrid button{height:44px;border-radius:12px;background:var(--surf);font-family:var(--mono);font-weight:600;font-size:14px}
+.keygrid button.on{background:var(--acc);color:#fff}
+.keyprev{margin-top:14px;padding:12px;border-radius:12px;background:var(--surf);font-family:var(--mono);font-size:13px;color:#cfcfcf;text-align:center;line-height:1.6}
 /* ses listesi */
 .tonelist button.on{background:var(--surf2)}
 .tonelist .chk{width:18px;height:18px;border-radius:50%;border:1.5px solid var(--line)}
