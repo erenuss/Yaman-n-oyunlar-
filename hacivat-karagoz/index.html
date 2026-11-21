@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#1b0d06">
+<title>Hayâl Perdesi · Karagöz ile Hacivat</title>
+<meta name="description" content="Ellerinle Karagöz ile Hacivat'ı oynat: kamera el takibiyle tarayıcıda çalışan gölge oyunu.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,500;0,700;1,500&family=Cinzel+Decorative:wght@700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <a class="back" href="../" aria-label="Oyunlara dön">‹</a>
+  <h1><span class="t1">Hayâl Perdesi</span><span class="t2">Karagöz ile Hacivat</span></h1>
+  <div class="tools">
+    <button id="bSound" class="chip" aria-pressed="true" title="Ses efektleri">🔊<span> Ses</span></button>
+    <button id="bVoice" class="chip" aria-pressed="true" title="Repliklerin seslendirilmesi">🗣️<span> Seslendir</span></button>
+    <button id="bPip" class="chip" aria-pressed="true" title="Kamera önizlemesi">📷<span> Önizleme</span></button>
+    <button id="bShot" class="chip" title="Fotoğraf çek">📸<span> Fotoğraf</span></button>
+    <button id="bFull" class="chip" title="Tam ekran">⛶<span> Tam ekran</span></button>
+  </div>
+</header>
+
+<main>
+  <div class="frame" id="frame">
+    <div class="perde">
+      <canvas id="stage" aria-label="Karagöz perdesi"></canvas>
+      <canvas id="pip" width="240" height="180" aria-hidden="true"></canvas>
+      <div id="status" class="status" role="status"></div>
+
+      <div id="intro" class="overlay">
+        <div class="card">
+          <div class="ornament">❦</div>
+          <h2>Perde açılıyor!</h2>
+          <p class="lead">Sağ elin <b class="hc">Hacivat</b>, sol elin <b class="kc">Karagöz</b> olsun. Ellerini kameraya göster, kuklalar senin elinle oynasın.</p>
+          <div class="btns">
+            <button id="bCam" class="primary">📷 Ellerimle oyna</button>
+            <button id="bTouch" class="ghost">👆 Dokunarak / fareyle oyna</button>
+          </div>
+          <p class="small">Görüntün yalnızca bu cihazda işlenir, hiçbir yere gönderilmez.</p>
+          <p id="loadMsg" class="small load"></p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <section class="pads" aria-label="Kukla düğmeleri">
+    <div class="pad k">
+      <strong>Karagöz</strong>
+      <div class="row">
+        <button data-p="0" data-a="talk">💬 Konuş</button>
+        <button data-p="0" data-a="hit">👊 Vur</button>
+        <button data-p="0" data-a="flip">🤸 Takla</button>
+        <button data-p="0" data-a="turn">↔ Dön</button>
+      </div>
+      <small>Klavye: Q · W · E · R</small>
+    </div>
+    <div class="pad h">
+      <strong>Hacivat</strong>
+      <div class="row">
+        <button data-p="1" data-a="talk">💬 Konuş</button>
+        <button data-p="1" data-a="hit">👊 Vur</button>
+        <button data-p="1" data-a="flip">🤸 Takla</button>
+        <button data-p="1" data-a="turn">↔ Dön</button>
+      </div>
+      <small>Klavye: U · I · O · P</small>
+    </div>
+  </section>
+
+  <section class="help">
+    <h3>Ellerle nasıl oynanır?</h3>
+    <ul>
+      <li><span>✋</span><b>Elini gezdir</b> kukla yürür, gittiği yöne döner, bacakları sallanır.</li>
+      <li><span>🤏</span><b>Başparmakla işaret parmağını birleştir</b> kukla konuşur. Sırayla konuşturursan karşılıklı muhavere olur.</li>
+      <li><span>✊</span><b>Yumruk yap</b> kolunu kaldırır. Diğerine yakınken hızlıca yumruk yaparsan <i>“Pat!”</i></li>
+      <li><span>↪️</span><b>Elini yana eğ</b> kukla eğilir, selam verir.</li>
+      <li><span>🔄</span><b>Bileğini hızla çevir</b> kukla takla atar.</li>
+      <li><span>🔍</span><b>Elini kameraya yaklaştır</b> kukla perdeden uzaklaşır, gölgesi büyür.</li>
+    </ul>
+    <p class="tip">İpucu: Aydınlık bir yerde, kameradan bir kol boyu uzakta, iki elin de görünür olacak şekilde oyna. Telefonu yatay tutarsan perde büyür.</p>
+  </section>
+  <footer>Geleneksel Türk gölge oyunu <i>Karagöz</i> UNESCO Somut Olmayan Kültürel Miras listesindedir. Bu sahne ve kuklalar özgün çizimdir. El takibi: MediaPipe (Apache 2.0).</footer>
+</main>
+
+<video id="cam" playsinline muted autoplay></video>
+<script type="module" src="app.js"></script>
+</body>
+</html>

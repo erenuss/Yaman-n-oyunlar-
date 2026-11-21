@@ -1,0 +1,3 @@
+MediaPipe Tasks Vision 0.10.14 (@mediapipe/tasks-vision) ve Hand Landmarker modeli.
+Copyright Google LLC. Apache License 2.0 — https://github.com/google-ai-edge/mediapipe/blob/master/LICENSE
+Tarayıcıda yerel olarak çalışır; görüntü hiçbir sunucuya gönderilmez.
