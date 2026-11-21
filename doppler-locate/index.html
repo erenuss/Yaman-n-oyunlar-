@@ -2,17 +2,17 @@
 <html lang="tr"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#080f1c"><meta name="description" content="Doppler etkisi ile videodaki uçak sesinden konum arama laboratuvarı.">
-<title>DOPPLER / LOCATE · Akustik Konum Laboratuvarı</title>
+<title>LocateVideo · Uçak sesinden konum analizi</title>
 <link rel="stylesheet" href="./style.css">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
 <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 <script defer src="./app.js"></script>
 </head><body>
 <div class="glow glow-a"></div><div class="glow glow-b"></div>
-<header class="top"><a class="brand" href="./"><span class="mark">◉</span> DOPPLER<span class="brand-slash">/</span>LOCATE</a><nav><a href="../">← Diğer projeler</a><a href="https://github.com/leo-aa88/aerodoppler" target="_blank" rel="noopener">Bilimsel motor ↗</a><span id="engine-status" class="pill">Motor kontrol ediliyor</span></nav></header>
+<header class="top"><a class="brand" href="./"><span class="mark">◉</span> LOCATE<span class="brand-slash">/</span>VIDEO</a><nav><a href="../">← Diğer projeler</a><a href="https://github.com/leo-aa88/aerodoppler" target="_blank" rel="noopener">Bilimsel motor ↗</a><span id="engine-status" class="pill">Motor kontrol ediliyor</span></nav></header>
 <main>
 <section class="hero"><div class="micro">✦ AKUSTİK COĞRAFİ KONUM ANALİZİ <span class="label">BETA · RESEARCH</span></div><h1>Bir uçak sesi.<br><em>Bir konumun izi.</em></h1><p>Videonun arka planındaki frekans değişimini incele. Uçak geçişinin Doppler eğrisi ile geçmiş ADS-B uçuş rotalarını eşleştirerek olası çekim noktalarını araştır.</p></section>
-<div id="pages-warning" class="notice" hidden><b>GitHub Pages önizlemesi</b><span>Bu sayfada videonu açıp ses spektrumunu inceleyebilirsin. Gerçek konum eşleştirmesi için <strong>ayrıca çalışan AeroDoppler sunucusu</strong> gerekir. GitHub Pages tek başına Python analizi çalıştıramaz. <a href="https://codespaces.new/erenuss/Yaman-n-oyunlar-?devcontainer_path=.devcontainer%2Fdoppler-locate%2Fdevcontainer.json&quickstart=1" target="_blank" rel="noopener">GitHub bulutunda çalıştır ↗</a></span><a href="#server">Diğer seçenekler ↓</a></div>
+<div id="pages-warning" class="notice" hidden><b>LocateVideo · Arayüz önizlemesi</b><span>Bu sayfada videonu açıp ses spektrumunu inceleyebilirsin. Gerçek konum eşleştirmesi için <strong>ayrıca çalışan AeroDoppler sunucusu</strong> gerekir. GitHub Pages tek başına Python analizi çalıştıramaz. <a href="https://codespaces.new/erenuss/Yaman-n-oyunlar-?devcontainer_path=.devcontainer%2Fdoppler-locate%2Fdevcontainer.json&quickstart=1" target="_blank" rel="noopener">GitHub bulutunda çalıştır ↗</a></span><a href="#server">Diğer seçenekler ↓</a></div>
 <section class="cols">
 <div class="panel input-panel"><div class="section"><span class="count">01 / MEDYA</span><h2>Kaydını yükle</h2><p>Dosya seçimi öncelikle tarayıcıda kalır. Tam analiz başlatırsan seçtiğin analiz sunucusuna yüklenir.</p></div>
 <label class="drop" id="drop-zone"><input id="file" type="file" accept="video/*,audio/*,.mp4,.mov,.webm,.mp3,.wav,.m4a,.flac"><span class="upload-icon">↥</span><strong id="file-name">Bir video veya ses seç</strong><small>MP4, MOV, WEBM, WAV, MP3, M4A</small><span class="choose">Dosya seç</span></label>

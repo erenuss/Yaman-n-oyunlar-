@@ -1,6 +1,6 @@
-# DOPPLER / LOCATE
+# LocateVideo
 
-Video ve ses dosyalarındaki uçak Doppler eğrilerini tarihsel ADS-B uçuşlarıyla eşleştiren deneysel araştırma uygulaması. Arayüz GitHub Pages'te, gerçek fizik hesabı AeroDoppler (MIT) motorunda çalışır.
+Video ve ses dosyalarındaki uçak Doppler eğrilerini tarihsel ADS-B uçuşlarıyla eşleştiren deneysel araştırma uygulaması. Arayüz GitHub Pages'te (önizleme), gerçek fizik hesabı AeroDoppler (MIT) motorunda çalışır.
 
 ## EN KOLAY: GitHub Codespaces ile bulutta tek tıkla başlat
 
