@@ -1,0 +1,4 @@
+Replik sesleri scripts/hk-voices.py ile üretildi.
+Motor: Piper TTS (MIT) — https://github.com/rhasspy/piper
+Ses modeli: tr_TR-dfki-medium — veri: https://github.com/marytts/dfki-ot-data (CC BY-NC-SA 4.0)
+Bu ses dosyaları ticari olmayan kullanım içindir ve aynı lisansla paylaşılır.

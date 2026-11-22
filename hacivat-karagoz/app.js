@@ -24,35 +24,8 @@ import { ART, LEG, ARM, OUT, leather, dots, joint, drawTurban, drawBackdrop, mak
 const leatherPat = makeLeather(octx), bgPat = makeLeather(bctx);
 
 /* -------------------------------------------------------------- DIALOGUE */
-const SCRIPT = [
-  ['h', 'Hay Hak! Yâr bana bir eğlence, medet!'],
-  ['k', 'Eğlence mi istedin? Al sana eğlence, Hacivat!'],
-  ['h', 'Aman Karagöz’üm, efendim, nereden çıktın böyle?'],
-  ['k', 'Perdenin arkasından çıktım, nereden olacak!'],
-  ['h', 'Biraz nezaket, biraz edep lütfen efendim.'],
-  ['k', 'Nezaket mi? O hangi mahallede oturuyor?'],
-  ['h', 'Nezaket mahalle değil, terbiyedir, terbiye!'],
-  ['k', 'Terbiye mi? Ben turşu terbiyesini bilirim!'],
-  ['h', 'Of of... Seninle konuşmak taşa su dökmek gibi.'],
-  ['k', 'Taşa dökme o zaman, testiye dök şu suyu!'],
-  ['h', 'Karagöz’üm, sana para kazandıracak bir iş buldum.'],
-  ['k', 'Para mı dedin? Kulaklarım bayram etti!'],
-  ['h', 'Bursa’dan İstanbul’a mektup taşıyacaksın.'],
-  ['k', 'Yürüyerek mi? Bacaklarım tahta değil ya!'],
-  ['h', 'Tahta değil, deridir efendim, deve derisi!'],
-  ['k', 'İşte bak! Bunu da sen söyledin Hacivat!'],
-  ['h', 'Şakayı bırak da sözümü dinle bir kere.'],
-  ['k', 'Dinliyorum, iki kulağım da sende!'],
-  ['h', 'Kulakları değil, aklını bana ver efendim.'],
-  ['k', 'Aklımı verirsem ben ne ile düşüneceğim?'],
-  ['h', 'Ah Karagöz, gene perdeyi birbirine kattın!'],
-  ['k', 'Yıktın perdeyi, eyledin viran! Varayım sahibine haber vereyim!'],
-  ['h', 'Sürç-i lisan ettikse affola!']
-];
+import { SCRIPT, OUCH, HOP, voiceId } from './dialogue.js';
 let scriptIdx = 0;
-const OUCH = { k: ['Ah!', 'Ulan!', 'Aman başım!', 'Of kafam!'], h: ['Ah!', 'Aman efendim!', 'Of of!', 'Vay başım!'] };
-const HOP = { k: ['Hoppala!', 'Hop!', 'Oley!'], h: ['Hop!', 'Maşallah!', 'Ya sabır!'] };
-const HELLO = { k: 'Ulan Hacivat!', h: 'Hay Hak!' };
 function nextLine(code) {
   for (let i = 0; i < SCRIPT.length; i++) {
     const j = (scriptIdx + i) % SCRIPT.length;
@@ -100,38 +73,59 @@ function sfx(kind) {
 }
 
 /* ------------------------------------------------------------------ SPEECH */
-let voiceTR = null, speakingPuppet = null;
+// Replikler önceden seslendirildi: açık kaynak Piper TTS + Türkçe erkek sesi (scripts/hk-voices.py).
+// Web Audio ile çalınır; analizör, kuklanın çenesini sesin gerçek şiddetiyle oynatır.
+const voiceBufs = new Map(); let voicesLoading = null, curVoice = null;
+const allVoiceIds = () => [...SCRIPT.map(([c, t]) => voiceId(c, t)), ...['k', 'h'].flatMap(c => [...OUCH[c], ...HOP[c]].map(t => voiceId(c, t)))];
+function loadVoices() {
+  if (voicesLoading) return voicesLoading;
+  const a = audio(); if (!a) return Promise.resolve();
+  const one = id => fetch('voices/' + id + '.mp3').then(r => r.ok ? r.arrayBuffer() : null)
+    .then(b => b && new Promise(res => a.decodeAudioData(b, res, () => res(null))))
+    .then(buf => { if (buf) voiceBufs.set(id, buf); }).catch(() => { });
+  const ids = allVoiceIds(), first = voiceId('h', SCRIPT[0][1]);
+  voicesLoading = one(first).then(() => Promise.all(ids.filter(i => i !== first).map(one))).then(() => { testHooks.voices = voiceBufs.size; });
+  return voicesLoading;
+}
+// yedek: ses dosyası yoksa tarayıcının Türkçe sesi (erkek ses tercih edilir)
+let voiceTR = null;
 function pickVoice() {
   if (!('speechSynthesis' in window)) return;
-  const vs = speechSynthesis.getVoices();
-  voiceTR = vs.find(v => /^tr/i.test(v.lang) && /google|yelda|enhanced|premium/i.test(v.name)) || vs.find(v => /^tr/i.test(v.lang)) || null;
+  const tr = speechSynthesis.getVoices().filter(v => /^tr/i.test(v.lang));
+  voiceTR = tr.find(v => /ahmet|cem|tolga|emre|kerem|male|erkek/i.test(v.name)) || tr[0] || null;
 }
 if ('speechSynthesis' in window) { pickVoice(); speechSynthesis.onvoiceschanged = pickVoice; }
+function stopVoice() {
+  if (curVoice) { try { curVoice.src.stop(); } catch (e) { } curVoice.p.talkT = 0; curVoice.p.voiceAn = null; curVoice = null; }
+  if ('speechSynthesis' in window) try { speechSynthesis.cancel(); } catch (e) { }
+}
 function say(p, text, opts = {}) {
-  const dur = opts.short ? 1.3 : clamp(1.4 + text.length * .062, 1.8, 6);
   const o = p.other; if (o && o.bubble && !opts.short) { o.bubble.dur = Math.min(o.bubble.dur, o.bubble.t + .25); o.talkT = 0; }
+  const buf = settings.voice ? voiceBufs.get(voiceId(p.code, text)) : null;
+  const est = opts.short ? 1.3 : clamp(1.4 + text.length * .062, 1.8, 6);
+  const dur = buf ? Math.max(buf.duration + .6, opts.short ? 1.2 : 1.8) : est;
   p.bubble = { text, t: 0, dur, short: !!opts.short };
-  p.talkT = dur - (opts.short ? .3 : .5);
   testHooks.lastLines.push(p.code + ':' + text);
-  if (settings.voice && 'speechSynthesis' in window && voiceTR) {
-    try {
-      if (speakingPuppet && speakingPuppet !== p && speakingPuppet.bubble) speakingPuppet.talkT = 0;
-      speechSynthesis.cancel();
-      const u = new SpeechSynthesisUtterance(text);
-      u.voice = voiceTR; u.lang = voiceTR.lang;
-      u.pitch = p.code === 'k' ? .6 : 1.25; u.rate = p.code === 'k' ? 1.08 : 1.0;
-      speakingPuppet = p; p.talkT = 30;
-      const started = performance.now();
-      u.onend = u.onerror = () => {
-        if (speakingPuppet === p) speakingPuppet = null;
-        p.talkT = 0; if (p.bubble && p.bubble.text === text) p.bubble.dur = Math.max(p.bubble.t + .7, Math.min(p.bubble.dur, (performance.now() - started) / 1000 + .9));
-      };
-      // TTS sessizse (bazı cihazlar) kuklalar yine de konuşsun
-      setTimeout(() => { if (speakingPuppet === p && !speechSynthesis.speaking) { p.talkT = dur; speakingPuppet = null; } }, 1200);
-      speechSynthesis.speak(u);
-      p.bubble.dur = Math.max(dur, 2.2) + 2; // gerçek süre onend ile kısalır
-    } catch (e) { }
+  stopVoice();
+  if (buf) {
+    const a = audio(); const src = a.createBufferSource(); src.buffer = buf;
+    const an = a.createAnalyser(); an.fftSize = 512; an.smoothingTimeConstant = .2;
+    src.connect(an); an.connect(a.destination);
+    src.start(); curVoice = { src, p }; p.voiceAn = an; p.voiceArr = p.voiceArr || new Uint8Array(512); p.talkT = buf.duration + .05;
+    testHooks.played = (testHooks.played || 0) + 1;
+    src.onended = () => { if (p.voiceAn === an) { p.voiceAn = null; p.talkT = 0; } if (curVoice && curVoice.src === src) curVoice = null; };
+    return;
   }
+  p.talkT = dur - (opts.short ? .3 : .5);
+  if (settings.voice && voiceTR) {
+    try { const u = new SpeechSynthesisUtterance(text); u.voice = voiceTR; u.lang = voiceTR.lang; u.pitch = p.code === 'k' ? .8 : 1; u.rate = 1; speechSynthesis.speak(u); } catch (e) { }
+  }
+}
+function voiceLevel(p) { // 0..1 anlık ses şiddeti
+  const an = p.voiceAn; if (!an) return -1;
+  an.getByteTimeDomainData(p.voiceArr); let e = 0;
+  for (let i = 0; i < p.voiceArr.length; i++) { const v = (p.voiceArr[i] - 128) / 128; e += v * v; }
+  return Math.sqrt(e / p.voiceArr.length);
 }
 
 /* ------------------------------------------------------------------ PUPPET */
@@ -248,7 +242,8 @@ class Puppet {
     const nod = talking ? Math.sin(t * 9.5) * .06 + .04 : Math.sin(t * 1.3 + this.xFrac * 5) * .02;
     this.spring('head', -this.bow * .35 + nod + clamp(vyu * .0004, -.2, .2), 85, 7, dt);
     // çene
-    const jawT = talking ? .17 + .17 * Math.abs(Math.sin(t * 17 + Math.sin(t * 5.3) * 2)) : 0;
+    const lvl = talking ? voiceLevel(this) : -1;
+    const jawT = !talking ? 0 : lvl >= 0 ? clamp(lvl * 2.6, 0, .42) : .17 + .17 * Math.abs(Math.sin(t * 17 + Math.sin(t * 5.3) * 2));
     this.spring('jaw', jawT, 420, 24, dt);
     // tüm gövde eğimi
     let rotT = clamp(this.ctl.tilt * .15, -.2, .2) + clamp(vxu * .00012, -.12, .12);
@@ -549,9 +544,13 @@ async function startCamera() {
   openingLines();
 }
 function startTouch() { audio(); unlockVoice(); if (coarse) enterFs(); $('#intro').classList.add('hidden'); openingLines(); flash(coarse ? 'Sürükle: yürür · dokun: konuşur · yukarı fırlat: takla · yana fırlat: vurur' : 'Sürükle: yürür · tıkla: konuşur · çift tıkla: takla · yana fırlat: vurur', 5); }
-function unlockVoice() { if (settings.voice && 'speechSynthesis' in window) { try { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; speechSynthesis.speak(u); } catch (e) { } } }
+function unlockVoice() { loadVoices(); if (settings.voice && 'speechSynthesis' in window) { try { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; speechSynthesis.speak(u); } catch (e) { } } }
 let opened = false;
-function openingLines() { if (opened) return; opened = true; sfx('nareke'); setTimeout(() => say(hacivat, nextLine('h')), 700); }
+function openingLines() {
+  if (opened) return; opened = true; sfx('nareke');
+  const go = () => { if (!go.done) { go.done = true; say(hacivat, nextLine('h')); } };
+  Promise.race([loadVoices(), new Promise(r => setTimeout(r, 2500))]).then(() => setTimeout(go, 500));
+}
 
 const OPEN_REF = { 4: 1.05, 8: .85, 12: .9, 16: .85, 20: .7 }, openRef = { ...OPEN_REF };
 function features(lm) {
@@ -656,7 +655,7 @@ function flash(text, secs = 3.5) { const s = $('#status'); s.textContent = text;
 function toggle(btn, key, after) { btn.addEventListener('click', () => { settings[key] = !settings[key]; btn.setAttribute('aria-pressed', settings[key]); after && after(); }); }
 toggle($('#bSound'), 'sound');
 toggle($('#bStr'), 'strings', () => flash(settings.strings ? '🪢 İpli kukla: parmaklarını bük, uzuvlar kalksın' : 'Serbest mod: yumrukla kol kaldır, eğerek selam ver', 3));
-toggle($('#bVoice'), 'voice', () => { if (!settings.voice && 'speechSynthesis' in window) speechSynthesis.cancel(); });
+toggle($('#bVoice'), 'voice', () => { if (!settings.voice) stopVoice(); else loadVoices(); });
 toggle($('#bPip'), 'pip', () => pip.classList.toggle('on', settings.pip && camOn));
 // Tam ekran: destekleyen tarayıcıda gerçek, iPhone Safari'de sayfayı kaplayan sahne
 const coarse = matchMedia('(pointer: coarse)').matches;
@@ -681,7 +680,7 @@ $('#bShot').addEventListener('click', () => {
 $('#bCam').addEventListener('click', startCamera);
 $('#bTouch').addEventListener('click', startTouch);
 if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { $('#loadMsg').textContent = 'Bu tarayıcı kamerayı desteklemiyor; dokunarak oynayabilirsin.'; $('#bCam').disabled = true; }
-document.addEventListener('visibilitychange', () => { if (document.hidden && 'speechSynthesis' in window) speechSynthesis.cancel(); });
+document.addEventListener('visibilitychange', () => { if (document.hidden) stopVoice(); });
 
 /* ------------------------------------------------------------------ LOOP */
 let last = performance.now(), T = 0;
@@ -713,7 +712,7 @@ function frame(now) {
   render(dt);
   drawPip();
   testHooks.frames++;
-  testHooks.state = puppets.map(p => ({ x: Math.round(p.x), y: Math.round(p.y), face: p.facing, src: p.src, arm: +p.ctl.arm.toFixed(2), talk: p.talkT > 0, flip: p.flipT >= 0 }));
+  testHooks.state = puppets.map(p => ({ x: Math.round(p.x), y: Math.round(p.y), face: p.facing, src: p.src, arm: +p.ctl.arm.toFixed(2), talk: p.talkT > 0, flip: p.flipT >= 0, jaw: +p.jaw.toFixed(2) }));
 }
 function render(dt) {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
