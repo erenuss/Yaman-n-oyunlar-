@@ -20,7 +20,7 @@ const settings = { sound: true, voice: true, pip: true, strings: true };
 const testHooks = (window.__hk = { frames: 0, hands: 0, lastLines: [] });
 
 /* ------------------------------------------------------------------ ART */
-import { ART, LEG, ARM, OUT, leather, dots, joint, drawTurban, drawBackdrop, makeLeather } from './art.js';
+import { ART, LEG, ARM, OUT, drawPuppet, drawBackdrop, makeLeather } from './art.js';
 const leatherPat = makeLeather(octx), bgPat = makeLeather(bctx);
 
 /* -------------------------------------------------------------- DIALOGUE */
@@ -131,7 +131,7 @@ function voiceLevel(p) { // 0..1 anlık ses şiddeti
 /* ------------------------------------------------------------------ PUPPET */
 class Puppet {
   constructor(kind, xFrac, facing) {
-    this.kind = kind; this.code = kind[0]; this.A = ART[kind]; this.foreP = ARM.fore(ART[kind].fore);
+    this.kind = kind; this.code = kind[0]; this.A = ART[kind]; 
     this.xFrac = xFrac; this.facing = facing; this.face = facing;
     this.x = 0; this.y = 0; this.vx = 0; this.vy = 0; this.tx = null; this.ty = null;
     this.bow = 0; this.bowV = 0; this.head = 0; this.headV = 0; this.jaw = 0; this.jawV = 0;
@@ -201,13 +201,13 @@ class Puppet {
     this.strOn = strOn;
     let ikF, ikB, ikLF, ikLB;
     if (strOn) {
-      const A = this.A, L2 = A.fore + 12, Fl = this.facing;
+      const A = this.A, L2 = A.fore + 14, Fl = this.facing;
       const fk = (t1, t2) => [-ARM.elbow * Math.sin(t1) - L2 * Math.sin(t1 + t2), ARM.elbow * Math.cos(t1) + L2 * Math.cos(t1 + t2)];
       const rf = fk(A.armRest[0], A.armRest[1]), rb = fk(A.backArm[0], A.backArm[1]);
       ikF = ik2(rf[0] + sc.latI * (1 - sc.cI) * Fl * 38 + sc.cI * 30, rf[1] - sc.cI * 135, ARM.elbow, L2, 1);
       ikB = ik2(rb[0] + sc.latT * (1 - sc.cT) * Fl * 30 + sc.cT * 12, rb[1] - sc.cT * 120, ARM.elbow, L2, 1);
-      ikLF = ik2(sc.cR * 34, 95 - sc.cR * 64, LEG.knee, 42, -1);
-      ikLB = ik2(sc.cP * 34, 95 - sc.cP * 64, LEG.knee, 42, -1);
+      ikLF = ik2(sc.cR * 36, LEG.knee + LEG.ankle - 1 - sc.cR * 66, LEG.knee, LEG.ankle, -1);
+      ikLB = ik2(sc.cP * 36, LEG.knee + LEG.ankle - 1 - sc.cP * 66, LEG.knee, LEG.ankle, -1);
     }
     const lag = clamp(axu * F * .00028, -.9, .9);
     const fl = this.flipT >= 0 ? Math.sin(this.flipT * Math.PI) : 0;
@@ -266,65 +266,10 @@ class Puppet {
     g.rotate(rot + clamp(this.knockV / S * .0002, -.3, .3));
     g.scale(sc * F, sc);
     g.lineJoin = 'round'; g.lineCap = 'round';
-
     const cap = (key, x, y) => { const q = new DOMPoint(x, y).matrixTransform(g.getTransform()); this.att[key] = [q.x / DPR, q.y / DPR]; };
-    const leg = (hip, hipA, kneeA, back) => {
-      const sh = back ? shade(c.shalvar) : c.shalvar;
-      g.save(); g.translate(hip[0], hip[1]); g.rotate(hipA);
-      g.save(); g.translate(0, LEG.knee); g.rotate(kneeA); cap(back ? 'lb' : 'lf', 0, 40);
-      leather(g, LEG.shin, sh, pat, { inset: 3 });
-      leather(g, LEG.shoe, back ? shade(c.shoe) : c.shoe, pat, { inset: 3 });
-      g.restore();
-      leather(g, LEG.thigh, sh, pat, { inset: 3.4 }); if (!back) dots(g, A.hShalvar, 1.3);
-      joint(g, 0, LEG.knee - 2);
-      g.restore();
-    };
-    const arm = (sh, el, back) => {
-      const skin = back ? shade(c.skin, .88) : c.skin;
-      g.save(); g.translate(A.shoulder[0], A.shoulder[1]); g.rotate(sh);
-      g.save(); g.translate(0, ARM.elbow); g.rotate(el);
-      leather(g, this.foreP, skin, pat, { inset: 2.4 });
-      g.save(); g.translate(0, A.fore - 2); cap(back ? 'hb' : 'hf', 2, 10);
-      leather(g, ARM.thumb, skin, pat, { dash: false, lw: 2 });
-      leather(g, ARM.hand, skin, pat, { dash: false, lw: 2.2 });
-      g.lineWidth = 1.3; g.strokeStyle = OUT; g.stroke(ARM.fingers);
-      g.restore(); g.restore();
-      leather(g, ARM.sleeve, back ? shade(c.jacket) : c.jacket, pat, { inset: 3 });
-      leather(g, ARM.cuff, c.trim, pat, { dash: false, lw: 2.2 });
-      joint(g, 0, ARM.elbow - 1, 2.8); joint(g, 0, 0);
-      g.restore();
-    };
-    leg(A.hips[0], this.hipB, this.kneeB, true);
-    leg(A.hips[1], this.hipF, this.kneeF, false);
-    g.save(); g.rotate(this.bow + A.hunch);
-    arm(this.bA + this.shB * .25, this.bE + (this.strOn ? 0 : this.jaw * .8), true);
-    leather(g, A.skirt, c.skirt, pat); dots(g, A.hSkirt);
-    leather(g, A.skirtHem, c.hem, pat, { inset: 2.6 });
-    leather(g, A.jacket, c.jacket, pat);
-    leather(g, A.front, c.trim, pat, { inset: 2.4 });
-    leather(g, A.hem, c.trim, pat, { inset: 2.4 });
-    leather(g, A.collar, c.trim, pat, { inset: 2.4 });
-    leather(g, A.sash, c.sash, pat, { inset: 2.6 }); dots(g, A.hSash, 1.15);
-    leather(g, A.sashEnd, c.sash2, pat, { inset: 2.4 });
-    // baş
-    g.save(); g.translate(A.neck[0], A.neck[1]); g.rotate(this.head); g.scale(1.1, 1.1);
-    leather(g, A.face, c.skin, pat, { inset: 3 });
-    leather(g, A.ear, shade(c.skin, .86), pat, { dash: false, lw: 2 });
-    leather(g, A.eye, '#fffaf0', null, { dash: false, lw: 1.8 });
-    const [ix, iy, ir] = A.iris; g.fillStyle = '#120804'; g.beginPath(); g.arc(ix, iy, ir, 0, TAU); g.fill();
-    dots(g, [[ix + ir * .35, iy - ir * .35, ir * .28]]);
-    g.strokeStyle = OUT; g.lineWidth = 2.8; g.stroke(A.lid); g.lineWidth = 4.2; g.stroke(A.brow);
-    g.lineWidth = 1.6; for (const l of A.lines) g.stroke(l);
-    g.save(); g.translate(A.jawPivot[0], A.jawPivot[1]); g.rotate(this.jaw); g.translate(-A.jawPivot[0], -A.jawPivot[1]);
-    leather(g, A.jaw, c.beard, null, { dashColor: '#6f98a0', inset: 3 }); dots(g, A.hBeard, 1.25, 'rgba(150,200,210,.85)');
-    g.restore();
-    leather(g, A.mous, c.beard, null, { dash: false, lw: 2 });
-    drawTurban(g, A, pat); cap('head', A.rosette[0], A.rosette[1]);
-    const m = g.getTransform(); this.headScreen = [m.e / DPR, m.f / DPR];
-    g.restore();
-    joint(g, A.shoulder[0], A.shoulder[1] + 4, 2.6);
-    arm(this.sh, this.el, false);
-    g.restore();
+    drawPuppet(g, A, { hipB: this.hipB, kneeB: this.kneeB, hipF: this.hipF, kneeF: this.kneeF, bow: this.bow, head: this.head, jaw: this.jaw,
+      sh: this.sh, el: this.el, bA: this.bA + this.shB * .25, bE: this.bE + (this.strOn ? 0 : this.jaw * .6) }, pat, cap, shade);
+    if (this.att.neckScr) this.headScreen = this.att.neckScr;
     g.restore();
   }
 
@@ -450,9 +395,9 @@ function resize() {
   DPR = Math.min(window.devicePixelRatio || 1, 2); W = r.width; H = r.height;
   stage.width = Math.round(W * DPR); stage.height = Math.round(H * DPR);
   off.width = stage.width; off.height = stage.height;
-  S = Math.min(H * .00175, W * (W < H ? .0021 : .0017));
+  S = Math.min(H * .00215, W * (W < H ? .0024 : .002));
   const tb = document.querySelector('.tbar'); footPad = tb && getComputedStyle(tb).display !== 'none' ? 60 : 0;
-  if (footPad) S = Math.min(S, (H - footPad) * .0019);
+  if (footPad) S = Math.min(S, (H - footPad) * .0023);
   buildBackdrop();
   for (const p of puppets) {
     if (p.tx === null) continue;
